@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GeoGuessr TWA</title>
+    
+    <!-- Telegram Web App Script -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <!-- Maps & Styles -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://unpkg.com/mapillary-js@4.1.0/dist/mapillary.css" rel="stylesheet" />
+
+    <style>
+        /* CSS Variables: Auto-adapt to Telegram Dark/Light Theme */
+        :root {
+            --bg-color: var(--tg-theme-bg-color, #000000);
+            --text-color: var(--tg-theme-text-color, #ffffff);
+            --button-color: var(--tg-theme-button-color, #3390ec);
+            --button-text: var(--tg-theme-button-text-color, #ffffff);
+            --secondary-bg: var(--tg-theme-secondary-bg-color, #232e3c);
+        }
+
+        body, html { 
+            margin: 0; padding: 0; height: 100%; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, sans-serif;
+            background: var(--bg-color); color: var(--text-color);
+            overflow: hidden; 
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* 1. STREET VIEW LAYER */
+        #mly { 
+            width: 100%; height: 100%; 
+            position: absolute; top: 0; left: 0; z-index: 1; 
+        }
+
+        /* 2. LOADING OVERLAY */
+        #loading {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-color); 
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 5000;
+        }
+        .spinner {
+            width: 40px; height: 40px; border: 4px solid var(--button-color);
+            border-top: 4px solid transparent; border-radius: 50%;
+            animation: spin 0.8s linear infinite; margin-bottom: 20px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* 3. MOBILE MAP TOGGLE BUTTON */
+        #mobile-map-toggle {
+            position: absolute; bottom: 20px; right: 20px;
+            width: 60px; height: 60px; border-radius: 50%;
+            background: var(--button-color); color: var(--button-text);
+            font-size: 26px; border: none; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            z-index: 100; cursor: pointer; display: flex;
+            justify-content: center; align-items: center;
+            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        #mobile-map-toggle:active { transform: scale(0.9); }
+
+        /* 4. MAP CONTAINER POPUP */
+        #map-container {
+            position: absolute; bottom: 90px; right: 20px;
+            width: 90vw; max-width: 450px; height: 45vh; max-height: 450px;
+            background: white; border-radius: 16px;
+            border: 4px solid #fff;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+            z-index: 200; overflow: hidden;
+            transform: scale(0); opacity: 0; pointer-events: none;
+            transform-origin: bottom right;
+            transition: all 0.35s cubic-bezier(0.19, 1, 0.22, 1);
+            display: flex; flex-direction: column;
+        }
+        
+        #map-container.open {
+            transform: scale(1); opacity: 1; pointer-events: all;
+        }
+
+        #map { flex-grow: 1; width: 100%; }
+
+        /* 5. GUESS BUTTON */
+        #confirm-btn {
+            width: 100%; padding: 18px;
+            background: #7f8c8d; color: white;
+            font-weight: 800; font-size: 16px; border: none;
+            text-transform: uppercase; cursor: not-allowed; letter-spacing: 0.5px;
+            transition: 0.3s;
+        }
+        #confirm-btn.active {
+            background: var(--button-color); cursor: pointer;
+        }
+
+        /* 6. RESULT BOTTOM SHEET */
+        #result-sheet {
+            position: absolute; bottom: 0; left: 0; width: 100%;
+            background: var(--secondary-bg); 
+            border-top-left-radius: 24px; border-top-right-radius: 24px;
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
+            z-index: 3000;
+            transform: translateY(110%); /* Hidden */
+            transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+            padding: 25px 20px; box-sizing: border-box;
+            display: flex; flex-direction: column; gap: 15px;
+            color: var(--text-color);
+        }
+        
+        #result-sheet.show { transform: translateY(0); }
+
+        .result-row { display: flex; justify-content: space-between; align-items: center; }
+        .big-dist { font-size: 2.2rem; font-weight: 900; line-height: 1; }
+        .sub-text { color: #888; font-size: 0.9rem; text-align: right; margin-top: 5px; }
+
+        .btn-play-again {
+            background: var(--button-color); color: var(--button-text);
+            padding: 16px; border: none; border-radius: 14px;
+            font-size: 17px; font-weight: bold; width: 100%; cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        /* 7. RESULT MODE (MAP TAKES FULL SCREEN BEHIND SHEET) */
+        .map-result-mode {
+            bottom: 0 !important; right: 0 !important;
+            width: 100% !important; height: 100% !important;
+            border-radius: 0 !important; border: none !important;
+            max-width: none !important; max-height: none !important;
+            z-index: 2500 !important;
+        }
+
+        .hidden { display: none !important; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Loading -->
+    <div id="loading">
+        <div class="spinner"></div>
+        <h3 id="status-text">Teleporting...</h3>
+    </div>
+
+    <!-- Street View -->
+    <div id="mly"></div>
+
+    <!-- Open Map Button -->
+    <button id="mobile-map-toggle" onclick="toggleMap()">🗺️</button>
+
+    <!-- Map UI -->
+    <div id="map-container">
+        <div id="map"></div>
+        <button id="confirm-btn" onclick="submitGuess()">Tap map to guess</button>
+    </div>
+
+    <!-- Results -->
+    <div id="result-sheet">
+        <div class="result-row">
+            <div>
+                <div class="big-dist" id="distance-display">0 km</div>
+                <div style="font-size:12px; color:#aaa; font-weight:bold;">DISTANCE ERROR</div>
+            </div>
+            <div>
+                <div style="font-size: 1.1rem; font-weight:bold; color:var(--text-color); text-align:right;">
+                    Target Location
+                </div>
+                <div id="actual-city-name" class="sub-text">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Accuracy Visual -->
+        <div style="background:#444; height:6px; border-radius:3px; width:100%; overflow:hidden;">
+            <div id="accuracy-bar" style="background:#4cd964; width:0%; height:100%; transition: width 1s;"></div>
+        </div>
+
+        <button class="btn-play-again" onclick="startNewGame()">Play Next Round</button>
+    </div>
+
+    <!-- JS Libs -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/mapillary-js@4.1.0/dist/mapillary.js"></script>
+
+    <script>
+        // ============================================
+        // 1. TELEGRAM SETUP & FULLSCREEN
+        // ============================================
+        const tg = window.Telegram.WebApp;
+
+        // INIT SEQUENCE
+        tg.ready();
+        tg.expand();
+        
+        // --- REQUEST FULLSCREEN IMMEDIATELY ---
+        try {
+            if (tg.requestFullscreen) {
+                tg.requestFullscreen();
+            } else if (tg.enterFullscreen) {
+                tg.enterFullscreen(); // Handling alias versions
+            }
+        } catch (e) {
+            console.log("Fullscreen not supported or failed:", e);
+        }
+
+        // Apply System Colors
+        function applyThemes() {
+            try {
+                if(tg.themeParams) {
+                    const r = document.documentElement;
+                    r.style.setProperty('--bg-color', tg.themeParams.bg_color || '#1c1c1e');
+                    r.style.setProperty('--text-color', tg.themeParams.text_color || '#ffffff');
+                    r.style.setProperty('--button-color', tg.themeParams.button_color || '#3390ec');
+                    r.style.setProperty('--button-text', tg.themeParams.button_text_color || '#ffffff');
+                    r.style.setProperty('--secondary-bg', tg.themeParams.secondary_bg_color || '#232e3c');
+                }
+            } catch(e) {}
+        }
+        applyThemes();
+
+
+        // ============================================
+        // 2. SETTINGS & LOCATION DATA
+        // ============================================
+        // Replace with your VALID Token from Mapillary Dashboard
+        const MAPILLARY_TOKEN = 'MLY|26213154491618951|523c0418de2d6a8118aefdab3284d6c2'; 
+        
+        const LOCATIONS = [
+            // NORTH AMERICA
+            { name: "New York, USA", lat: 40.7128, lng: -74.0060 },
+            { name: "Los Angeles, USA", lat: 34.0522, lng: -118.2437 },
+            { name: "Chicago, USA", lat: 41.8781, lng: -87.6298 },
+            { name: "San Francisco, USA", lat: 37.7749, lng: -122.4194 },
+            { name: "Miami, USA", lat: 25.7617, lng: -80.1918 },
+            { name: "Las Vegas, USA", lat: 36.1699, lng: -115.1398 },
+            { name: "Seattle, USA", lat: 47.6062, lng: -122.3321 },
+            { name: "Toronto, Canada", lat: 43.6532, lng: -79.3832 },
+            { name: "Vancouver, Canada", lat: 49.2827, lng: -123.1207 },
+            { name: "Montreal, Canada", lat: 45.5017, lng: -73.5673 },
+            { name: "Mexico City, Mexico", lat: 19.4326, lng: -99.1332 },
+            { name: "Guadalajara, Mexico", lat: 20.6597, lng: -103.3496 },
+
+            // SOUTH AMERICA
+            { name: "São Paulo, Brazil", lat: -23.5505, lng: -46.6333 },
+            { name: "Rio de Janeiro, Brazil", lat: -22.9068, lng: -43.1729 },
+            { name: "Brasília, Brazil", lat: -15.7975, lng: -47.8919 },
+            { name: "Buenos Aires, Argentina", lat: -34.6037, lng: -58.3816 },
+            { name: "Santiago, Chile", lat: -33.4489, lng: -70.6693 },
+            { name: "Bogotá, Colombia", lat: 4.7110, lng: -74.0721 },
+            { name: "Medellín, Colombia", lat: 6.2442, lng: -75.5812 },
+            { name: "Lima, Peru", lat: -12.0464, lng: -77.0428 },
+            { name: "Quito, Ecuador", lat: -0.1807, lng: -78.4678 },
+
+            // EUROPE
+            { name: "London, UK", lat: 51.5074, lng: -0.1278 },
+            { name: "Manchester, UK", lat: 53.4808, lng: -2.2426 },
+            { name: "Paris, France", lat: 48.8566, lng: 2.3522 },
+            { name: "Lyon, France", lat: 45.7640, lng: 4.8357 },
+            { name: "Madrid, Spain", lat: 40.4168, lng: -3.7038 },
+            { name: "Barcelona, Spain", lat: 41.3851, lng: 2.1734 },
+            { name: "Lisbon, Portugal", lat: 38.7223, lng: -9.1393 },
+            { name: "Berlin, Germany", lat: 52.5200, lng: 13.4050 },
+            { name: "Munich, Germany", lat: 48.1351, lng: 11.5820 },
+            { name: "Hamburg, Germany", lat: 53.5511, lng: 9.9937 },
+            { name: "Rome, Italy", lat: 41.9028, lng: 12.4964 },
+            { name: "Milan, Italy", lat: 45.4642, lng: 9.1900 },
+            { name: "Amsterdam, Netherlands", lat: 52.3676, lng: 4.9041 },
+            { name: "Brussels, Belgium", lat: 50.8503, lng: 4.3517 },
+            { name: "Vienna, Austria", lat: 48.2082, lng: 16.3738 },
+            { name: "Prague, Czechia", lat: 50.0755, lng: 14.4378 },
+            { name: "Budapest, Hungary", lat: 47.4979, lng: 19.0402 },
+            { name: "Stockholm, Sweden", lat: 59.3293, lng: 18.0686 },
+            { name: "Oslo, Norway", lat: 59.9139, lng: 10.7522 },
+            { name: "Helsinki, Finland", lat: 60.1699, lng: 24.9384 },
+            { name: "Copenhagen, Denmark", lat: 55.6761, lng: 12.5683 },
+            { name: "Warsaw, Poland", lat: 52.2297, lng: 21.0122 },
+            { name: "Athens, Greece", lat: 37.9838, lng: 23.7275 },
+            { name: "Zurich, Switzerland", lat: 47.3769, lng: 8.5417 },
+            
+            // ASIA
+            { name: "Istanbul, Turkey", lat: 41.0082, lng: 28.9784 },
+            { name: "Tokyo, Japan", lat: 35.6762, lng: 139.6503 },
+            { name: "Osaka, Japan", lat: 34.6937, lng: 135.5023 },
+            { name: "Seoul, South Korea", lat: 37.5665, lng: 126.9780 },
+            { name: "Taipei, Taiwan", lat: 25.0330, lng: 121.5654 },
+            { name: "Bangkok, Thailand", lat: 13.7563, lng: 100.5018 },
+            { name: "Singapore", lat: 1.3521, lng: 103.8198 },
+            { name: "Kuala Lumpur, Malaysia", lat: 3.1390, lng: 101.6869 },
+            { name: "Jakarta, Indonesia", lat: -6.2088, lng: 106.8456 },
+            { name: "Manila, Philippines", lat: 14.5995, lng: 120.9842 },
+            { name: "Ho Chi Minh City, Vietnam", lat: 10.8231, lng: 106.6297 },
+            { name: "Dubai, UAE", lat: 25.2048, lng: 55.2708 },
+
+            // AFRICA & OCEANIA
+            { name: "Cape Town, South Africa", lat: -33.9249, lng: 18.4241 },
+            { name: "Johannesburg, South Africa", lat: -26.2041, lng: 28.0473 },
+            { name: "Nairobi, Kenya", lat: -1.2921, lng: 36.8219 },
+            { name: "Tunis, Tunisia", lat: 36.8065, lng: 10.1815 },
+            { name: "Sydney, Australia", lat: -33.8688, lng: 151.2093 },
+            { name: "Melbourne, Australia", lat: -37.8136, lng: 144.9631 },
+            { name: "Brisbane, Australia", lat: -27.4698, lng: 153.0251 },
+            { name: "Perth, Australia", lat: -31.9505, lng: 115.8605 },
+            { name: "Auckland, New Zealand", lat: -36.8485, lng: 174.7633 }
+        ];
+
+        let map, mly, guessMarker, actualLocation, resultLine, resultMarker, currentCityName;
+
+        // ============================================
+        // 3. MAIN LOGIC
+        // ============================================
+        function init() {
+            // Leaflet Init
+            map = L.map('map', { zoomControl: false }).setView([20, 0], 2);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '©CARTO'
+            }).addTo(map);
+
+            // Mapillary Init
+            const { Viewer } = mapillary;
+            mly = new Viewer({
+                accessToken: MAPILLARY_TOKEN,
+                container: 'mly',
+                component: { cover: false }
+            });
+
+            // Map Tap Logic
+            map.on('click', function(e) {
+                if(resultLine) return; // Locked
+
+                // Add Marker
+                if(guessMarker) map.removeLayer(guessMarker);
+                guessMarker = L.marker(e.latlng).addTo(map);
+
+                // Telegram Haptic
+                if(tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
+
+                // Activate Button
+                const btn = document.getElementById('confirm-btn');
+                btn.classList.add('active');
+                btn.innerText = "CONFIRM GUESS";
+                btn.disabled = false;
+            });
+
+            startNewGame();
+        }
+
+        // TOGGLE MINI-MAP
+        function toggleMap() {
+            // Haptic
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+
+            const cont = document.getElementById('map-container');
+            const btn = document.getElementById('mobile-map-toggle');
+            
+            if(cont.classList.contains('open')) {
+                cont.classList.remove('open');
+                btn.innerText = "🗺️";
+            } else {
+                cont.classList.add('open');
+                btn.innerText = "✖";
+                setTimeout(() => map.invalidateSize(), 300);
+            }
+        }
+
+        // RESTART GAME
+        function startNewGame() {
+            // Feedback
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('result-sheet').classList.remove('show');
+            document.getElementById('status-text').innerText = "Flying to destination...";
+            
+            // Restore Map Size/UI
+            const mapC = document.getElementById('map-container');
+            mapC.classList.remove('map-result-mode', 'open'); 
+            document.getElementById('mobile-map-toggle').style.display = 'flex';
+            document.getElementById('mobile-map-toggle').innerText = "🗺️";
+
+            // Reset Vars
+            if(guessMarker) map.removeLayer(guessMarker);
+            if(resultLine) map.removeLayer(resultLine);
+            if(resultMarker) map.removeLayer(resultMarker);
+            guessMarker = null; resultLine = null; actualLocation = null;
+            
+            // Button Reset
+            const btn = document.getElementById('confirm-btn');
+            btn.classList.remove('active');
+            btn.innerText = "Tap map to guess";
+            btn.disabled = true;
+
+            map.setView([20,0], 2);
+
+            findRandomImage(0);
+        }
+
+        // FIND IMAGE ALGORITHM
+        async function findRandomImage(attempts) {
+            if(attempts > 6) { 
+                document.getElementById('status-text').innerText = "Retrying (Poor Signal?)..."; 
+            }
+            if(attempts > 12) { attempts = 0; } // Soft reset loop
+
+            // 1. Pick City
+            const city = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
+            
+            // 2. Random Offset (approx 3km)
+            const range = 0.035;
+            const rLat = city.lat + (Math.random() * range * 2 - range);
+            const rLng = city.lng + (Math.random() * range * 2 - range);
+
+            // 3. 500m Bounding Box for Search
+            const box = 0.005; 
+            const bbox = `${rLng-box},${rLat-box},${rLng+box},${rLat+box}`;
+
+            const url = `https://graph.mapillary.com/images?access_token=${MAPILLARY_TOKEN}&fields=id,geometry&bbox=${bbox}&limit=1`;
+
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (data.data && data.data.length > 0) {
+                    const img = data.data[0];
+                    actualLocation = { lat: img.geometry.coordinates[1], lng: img.geometry.coordinates[0] };
+                    currentCityName = city.name;
+
+                    // Move Viewer
+                    mly.moveTo(img.id)
+                        .then(() => document.getElementById('loading').classList.add('hidden'))
+                        .catch(() => findRandomImage(attempts + 1));
+                } else {
+                    // Retry different city
+                    findRandomImage(attempts + 1);
+                }
+            } catch (e) {
+                setTimeout(() => findRandomImage(attempts + 1), 600);
+            }
+        }
+
+        // CALCULATE AND SHOW RESULT
+        function submitGuess() {
+            if(!guessMarker || !actualLocation) return;
+
+            // HAPTIC SUCCESS
+            if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+
+            const uLat = guessMarker.getLatLng();
+            const aLat = L.latLng(actualLocation.lat, actualLocation.lng);
+            const dist = Math.round(map.distance(uLat, aLat) / 1000);
+
+            // 1. Full Screen Map
+            document.getElementById('mobile-map-toggle').style.display = 'none';
+            document.getElementById('map-container').classList.add('map-result-mode', 'open');
+            setTimeout(() => map.invalidateSize(), 200);
+
+            // 2. Markers & Lines
+            resultMarker = L.circleMarker(aLat, {
+                radius: 8, color: '#fff', weight: 2, 
+                fillColor: '#00ff00', fillOpacity: 1
+            }).addTo(map);
+
+            resultLine = L.polyline([uLat, aLat], { 
+                color: 'red', weight: 3, dashArray: '5, 10' 
+            }).addTo(map);
+
+
+            // 3. SMART ZOOM LOGIC
+            // The result sheet at the bottom takes up roughly 35-40% of screen height.
+            // We use 'paddingBottomRight' to ensure the line is drawn in the TOP part of the screen.
+            const pHeight = window.innerHeight * 0.40; // 40% height buffer
+
+            map.fitBounds(resultLine.getBounds(), {
+                paddingTopLeft: [50, 50],
+                paddingBottomRight: [50, pHeight], // IMPORTANT: Keeps result visible above sheet
+                maxZoom: 12 // Prevent "too much zoom" when accuracy is very high
+            });
+
+
+            // 4. Fill Data
+            document.getElementById('distance-display').innerText = dist + " km";
+            document.getElementById('actual-city-name').innerText = currentCityName;
+
+            // Accuracy Bar (Max score 5000pts logic visually)
+            let percentage = 0;
+            if(dist < 5) percentage = 100;
+            else if(dist < 50) percentage = 90;
+            else if(dist < 2000) percentage = Math.max(10, 90 - (dist/50));
+            else percentage = 5;
+            
+            document.getElementById('accuracy-bar').style.width = percentage + "%";
+
+            // 5. Reveal Sheet
+            setTimeout(() => {
+                document.getElementById('result-sheet').classList.add('show');
+            }, 500);
+        }
+
+        init();
+    </script>
+</body>
+</html>
