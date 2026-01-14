@@ -8,9 +8,10 @@
     <!-- Telegram Web App Script -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-    <!-- Maps & Styles -->
+    <!-- External Libs: Leaflet, Mapillary, Confetti -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://unpkg.com/mapillary-js@4.1.0/dist/mapillary.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
     <style>
         /* CSS Variables: Auto-adapt to Telegram Dark/Light Theme */
@@ -34,6 +35,34 @@
         #mly { 
             width: 100%; height: 100%; 
             position: absolute; top: 0; left: 0; z-index: 1; 
+        }
+
+        /* COMPASS UI */
+        #compass {
+            position: absolute; top: 15px; left: 15px;
+            width: 50px; height: 50px;
+            background: rgba(0,0,0,0.6);
+            border-radius: 50%;
+            z-index: 10;
+            display: flex; justify-content: center; align-items: center;
+            border: 2px solid rgba(255,255,255,0.3);
+            pointer-events: none; /* Let clicks pass through to mapillary */
+        }
+        #compass-arrow {
+            width: 0; height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 24px solid white; /* South (white) */
+            position: relative;
+            transform-origin: center bottom;
+        }
+        #compass-arrow::after {
+            content: '';
+            position: absolute; top: 24px; left: -8px;
+            width: 0; height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 24px solid #ff3b30; /* North (Red) */
         }
 
         /* 2. LOADING OVERLAY */
@@ -104,22 +133,37 @@
             z-index: 3000;
             transform: translateY(110%); /* Hidden */
             transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
-            padding: 25px 20px; box-sizing: border-box;
+            padding: 25px 20px 40px 20px; box-sizing: border-box;
             display: flex; flex-direction: column; gap: 15px;
             color: var(--text-color);
         }
         
         #result-sheet.show { transform: translateY(0); }
 
-        .result-row { display: flex; justify-content: space-between; align-items: center; }
-        .big-dist { font-size: 2.2rem; font-weight: 900; line-height: 1; }
-        .sub-text { color: #888; font-size: 0.9rem; text-align: right; margin-top: 5px; }
+        .result-row { display: flex; justify-content: space-between; align-items: flex-start; }
+        
+        .big-dist { font-size: 2.0rem; font-weight: 900; line-height: 1; margin-bottom: 4px;}
+        .big-points { font-size: 1.4rem; color: #f1c40f; font-weight: bold; }
+        
+        .sub-text { color: #888; font-size: 0.95rem; text-align: right; margin-top: 5px; line-height: 1.4; }
+        .flag-icon { font-size: 1.2rem; margin-left: 5px; }
 
-        .btn-play-again {
+        /* Buttons Container */
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+        
+        .btn-primary {
             background: var(--button-color); color: var(--button-text);
-            padding: 16px; border: none; border-radius: 14px;
-            font-size: 17px; font-weight: bold; width: 100%; cursor: pointer;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            padding: 16px; border: none; border-radius: 12px;
+            font-size: 16px; font-weight: bold; flex: 1; cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.1); color: var(--text-color);
+            padding: 16px; border: none; border-radius: 12px;
+            font-size: 20px; width: 60px; cursor: pointer;
+            display: flex; justify-content: center; align-items: center;
         }
 
         /* 7. RESULT MODE (MAP TAKES FULL SCREEN BEHIND SHEET) */
@@ -144,7 +188,12 @@
     </div>
 
     <!-- Street View -->
-    <div id="mly"></div>
+    <div id="mly">
+        <!-- Compass Overlay -->
+        <div id="compass">
+            <div id="compass-arrow"></div>
+        </div>
+    </div>
 
     <!-- Open Map Button -->
     <button id="mobile-map-toggle" onclick="toggleMap()">🗺️</button>
@@ -159,23 +208,26 @@
     <div id="result-sheet">
         <div class="result-row">
             <div>
-                <div class="big-dist" id="distance-display">0 km</div>
-                <div style="font-size:12px; color:#aaa; font-weight:bold;">DISTANCE ERROR</div>
+                <div class="big-dist" id="distance-display">0 m</div>
+                <div class="big-points" id="points-display">0 pts</div>
             </div>
             <div>
                 <div style="font-size: 1.1rem; font-weight:bold; color:var(--text-color); text-align:right;">
-                    Target Location
+                    Location
                 </div>
                 <div id="actual-city-name" class="sub-text">Loading...</div>
             </div>
         </div>
 
         <!-- Accuracy Visual -->
-        <div style="background:#444; height:6px; border-radius:3px; width:100%; overflow:hidden;">
-            <div id="accuracy-bar" style="background:#4cd964; width:0%; height:100%; transition: width 1s;"></div>
+        <div style="background:#444; height:8px; border-radius:4px; width:100%; overflow:hidden;">
+            <div id="accuracy-bar" style="background:#4cd964; width:0%; height:100%; transition: width 1s ease-out;"></div>
         </div>
 
-        <button class="btn-play-again" onclick="startNewGame()">Play Next Round</button>
+        <div class="btn-group">
+            <button class="btn-secondary" onclick="shareResult()">📤</button>
+            <button class="btn-primary" onclick="startNewGame()">Play Next</button>
+        </div>
     </div>
 
     <!-- JS Libs -->
@@ -187,23 +239,14 @@
         // 1. TELEGRAM SETUP & FULLSCREEN
         // ============================================
         const tg = window.Telegram.WebApp;
-
-        // INIT SEQUENCE
         tg.ready();
         tg.expand();
         
-        // --- REQUEST FULLSCREEN IMMEDIATELY ---
         try {
-            if (tg.requestFullscreen) {
-                tg.requestFullscreen();
-            } else if (tg.enterFullscreen) {
-                tg.enterFullscreen(); // Handling alias versions
-            }
-        } catch (e) {
-            console.log("Fullscreen not supported or failed:", e);
-        }
+            if (tg.requestFullscreen) tg.requestFullscreen();
+            else if (tg.enterFullscreen) tg.enterFullscreen();
+        } catch (e) { console.log("Fullscreen failed:", e); }
 
-        // Apply System Colors
         function applyThemes() {
             try {
                 if(tg.themeParams) {
@@ -218,93 +261,179 @@
         }
         applyThemes();
 
-
         // ============================================
-        // 2. SETTINGS & LOCATION DATA
+        // 2. DATA (150 CITIES + FLAGS + NEW RUSSIA)
         // ============================================
-        // Replace with your VALID Token from Mapillary Dashboard
         const MAPILLARY_TOKEN = 'MLY|26213154491618951|523c0418de2d6a8118aefdab3284d6c2'; 
         
         const LOCATIONS = [
-            // NORTH AMERICA
-            { name: "New York, USA", lat: 40.7128, lng: -74.0060 },
-            { name: "Los Angeles, USA", lat: 34.0522, lng: -118.2437 },
-            { name: "Chicago, USA", lat: 41.8781, lng: -87.6298 },
-            { name: "San Francisco, USA", lat: 37.7749, lng: -122.4194 },
-            { name: "Miami, USA", lat: 25.7617, lng: -80.1918 },
-            { name: "Las Vegas, USA", lat: 36.1699, lng: -115.1398 },
-            { name: "Seattle, USA", lat: 47.6062, lng: -122.3321 },
-            { name: "Toronto, Canada", lat: 43.6532, lng: -79.3832 },
-            { name: "Vancouver, Canada", lat: 49.2827, lng: -123.1207 },
-            { name: "Montreal, Canada", lat: 45.5017, lng: -73.5673 },
-            { name: "Mexico City, Mexico", lat: 19.4326, lng: -99.1332 },
-            { name: "Guadalajara, Mexico", lat: 20.6597, lng: -103.3496 },
+            // --- RUSSIA (Existing + 8 New) ---
+            { name: "Saint Petersburg, Russia", flag: "🇷🇺", lat: 59.9311, lng: 30.3609 },
+            { name: "Moscow, Russia", flag: "🇷🇺", lat: 55.7558, lng: 37.6173 },
+            { name: "Kazan, Russia", flag: "🇷🇺", lat: 55.7963, lng: 49.1088 },
+            { name: "Sochi, Russia", flag: "🇷🇺", lat: 43.5852, lng: 39.7231 },
+            { name: "Novosibirsk, Russia", flag: "🇷🇺", lat: 55.0302, lng: 82.9204 },
+            { name: "Yekaterinburg, Russia", flag: "🇷🇺", lat: 56.8389, lng: 60.6057 },
+            { name: "Vladivostok, Russia", flag: "🇷🇺", lat: 43.1198, lng: 131.8869 },
+            { name: "Nizhny Novgorod, Russia", flag: "🇷🇺", lat: 56.2965, lng: 43.9361 },
+            { name: "Kaliningrad, Russia", flag: "🇷🇺", lat: 54.7104, lng: 20.4522 },
 
-            // SOUTH AMERICA
-            { name: "São Paulo, Brazil", lat: -23.5505, lng: -46.6333 },
-            { name: "Rio de Janeiro, Brazil", lat: -22.9068, lng: -43.1729 },
-            { name: "Brasília, Brazil", lat: -15.7975, lng: -47.8919 },
-            { name: "Buenos Aires, Argentina", lat: -34.6037, lng: -58.3816 },
-            { name: "Santiago, Chile", lat: -33.4489, lng: -70.6693 },
-            { name: "Bogotá, Colombia", lat: 4.7110, lng: -74.0721 },
-            { name: "Medellín, Colombia", lat: 6.2442, lng: -75.5812 },
-            { name: "Lima, Peru", lat: -12.0464, lng: -77.0428 },
-            { name: "Quito, Ecuador", lat: -0.1807, lng: -78.4678 },
+            // --- NORTH AMERICA ---
+            { name: "New York, USA", flag: "🇺🇸", lat: 40.7128, lng: -74.0060 },
+            { name: "Los Angeles, USA", flag: "🇺🇸", lat: 34.0522, lng: -118.2437 },
+            { name: "Chicago, USA", flag: "🇺🇸", lat: 41.8781, lng: -87.6298 },
+            { name: "San Francisco, USA", flag: "🇺🇸", lat: 37.7749, lng: -122.4194 },
+            { name: "Miami, USA", flag: "🇺🇸", lat: 25.7617, lng: -80.1918 },
+            { name: "Las Vegas, USA", flag: "🇺🇸", lat: 36.1699, lng: -115.1398 },
+            { name: "Seattle, USA", flag: "🇺🇸", lat: 47.6062, lng: -122.3321 },
+            { name: "Boston, USA", flag: "🇺🇸", lat: 42.3601, lng: -71.0589 },
+            { name: "Austin, USA", flag: "🇺🇸", lat: 30.2672, lng: -97.7431 },
+            { name: "Denver, USA", flag: "🇺🇸", lat: 39.7392, lng: -104.9903 },
+            { name: "New Orleans, USA", flag: "🇺🇸", lat: 29.9511, lng: -90.0715 },
+            { name: "Philadelphia, USA", flag: "🇺🇸", lat: 39.9526, lng: -75.1652 },
+            { name: "San Diego, USA", flag: "🇺🇸", lat: 32.7157, lng: -117.1611 },
+            { name: "Portland, USA", flag: "🇺🇸", lat: 45.5051, lng: -122.6750 },
+            { name: "Toronto, Canada", flag: "🇨🇦", lat: 43.6532, lng: -79.3832 },
+            { name: "Vancouver, Canada", flag: "🇨🇦", lat: 49.2827, lng: -123.1207 },
+            { name: "Montreal, Canada", flag: "🇨🇦", lat: 45.5017, lng: -73.5673 },
+            { name: "Calgary, Canada", flag: "🇨🇦", lat: 51.0447, lng: -114.0719 },
+            { name: "Ottawa, Canada", flag: "🇨🇦", lat: 45.4215, lng: -75.6972 },
+            { name: "Mexico City, Mexico", flag: "🇲🇽", lat: 19.4326, lng: -99.1332 },
+            { name: "Guadalajara, Mexico", flag: "🇲🇽", lat: 20.6597, lng: -103.3496 },
+            { name: "Monterrey, Mexico", flag: "🇲🇽", lat: 25.6866, lng: -100.3161 },
 
-            // EUROPE
-            { name: "London, UK", lat: 51.5074, lng: -0.1278 },
-            { name: "Manchester, UK", lat: 53.4808, lng: -2.2426 },
-            { name: "Paris, France", lat: 48.8566, lng: 2.3522 },
-            { name: "Lyon, France", lat: 45.7640, lng: 4.8357 },
-            { name: "Madrid, Spain", lat: 40.4168, lng: -3.7038 },
-            { name: "Barcelona, Spain", lat: 41.3851, lng: 2.1734 },
-            { name: "Lisbon, Portugal", lat: 38.7223, lng: -9.1393 },
-            { name: "Berlin, Germany", lat: 52.5200, lng: 13.4050 },
-            { name: "Munich, Germany", lat: 48.1351, lng: 11.5820 },
-            { name: "Hamburg, Germany", lat: 53.5511, lng: 9.9937 },
-            { name: "Rome, Italy", lat: 41.9028, lng: 12.4964 },
-            { name: "Milan, Italy", lat: 45.4642, lng: 9.1900 },
-            { name: "Amsterdam, Netherlands", lat: 52.3676, lng: 4.9041 },
-            { name: "Brussels, Belgium", lat: 50.8503, lng: 4.3517 },
-            { name: "Vienna, Austria", lat: 48.2082, lng: 16.3738 },
-            { name: "Prague, Czechia", lat: 50.0755, lng: 14.4378 },
-            { name: "Budapest, Hungary", lat: 47.4979, lng: 19.0402 },
-            { name: "Stockholm, Sweden", lat: 59.3293, lng: 18.0686 },
-            { name: "Oslo, Norway", lat: 59.9139, lng: 10.7522 },
-            { name: "Helsinki, Finland", lat: 60.1699, lng: 24.9384 },
-            { name: "Copenhagen, Denmark", lat: 55.6761, lng: 12.5683 },
-            { name: "Warsaw, Poland", lat: 52.2297, lng: 21.0122 },
-            { name: "Athens, Greece", lat: 37.9838, lng: 23.7275 },
-            { name: "Zurich, Switzerland", lat: 47.3769, lng: 8.5417 },
-            { name: "Saint-Peterburg, Russia", lat: 59.910982, lng: 30.337894 },
-            
-            // ASIA
-            { name: "Istanbul, Turkey", lat: 41.0082, lng: 28.9784 },
-            { name: "Tokyo, Japan", lat: 35.6762, lng: 139.6503 },
-            { name: "Osaka, Japan", lat: 34.6937, lng: 135.5023 },
-            { name: "Seoul, South Korea", lat: 37.5665, lng: 126.9780 },
-            { name: "Taipei, Taiwan", lat: 25.0330, lng: 121.5654 },
-            { name: "Bangkok, Thailand", lat: 13.7563, lng: 100.5018 },
-            { name: "Singapore", lat: 1.3521, lng: 103.8198 },
-            { name: "Kuala Lumpur, Malaysia", lat: 3.1390, lng: 101.6869 },
-            { name: "Jakarta, Indonesia", lat: -6.2088, lng: 106.8456 },
-            { name: "Manila, Philippines", lat: 14.5995, lng: 120.9842 },
-            { name: "Ho Chi Minh City, Vietnam", lat: 10.8231, lng: 106.6297 },
-            { name: "Dubai, UAE", lat: 25.2048, lng: 55.2708 },
+            // --- SOUTH AMERICA ---
+            { name: "São Paulo, Brazil", flag: "🇧🇷", lat: -23.5505, lng: -46.6333 },
+            { name: "Rio de Janeiro, Brazil", flag: "🇧🇷", lat: -22.9068, lng: -43.1729 },
+            { name: "Brasília, Brazil", flag: "🇧🇷", lat: -15.7975, lng: -47.8919 },
+            { name: "Salvador, Brazil", flag: "🇧🇷", lat: -12.9777, lng: -38.5016 },
+            { name: "Buenos Aires, Argentina", flag: "🇦🇷", lat: -34.6037, lng: -58.3816 },
+            { name: "Mendoza, Argentina", flag: "🇦🇷", lat: -32.8895, lng: -68.8458 },
+            { name: "Santiago, Chile", flag: "🇨🇱", lat: -33.4489, lng: -70.6693 },
+            { name: "Valparaiso, Chile", flag: "🇨🇱", lat: -33.0472, lng: -71.6127 },
+            { name: "Bogotá, Colombia", flag: "🇨🇴", lat: 4.7110, lng: -74.0721 },
+            { name: "Medellín, Colombia", flag: "🇨🇴", lat: 6.2442, lng: -75.5812 },
+            { name: "Lima, Peru", flag: "🇵🇪", lat: -12.0464, lng: -77.0428 },
+            { name: "Cusco, Peru", flag: "🇵🇪", lat: -13.5320, lng: -71.9675 },
+            { name: "Quito, Ecuador", flag: "🇪🇨", lat: -0.1807, lng: -78.4678 },
+            { name: "Montevideo, Uruguay", flag: "🇺🇾", lat: -34.9011, lng: -56.1645 },
+            { name: "La Paz, Bolivia", flag: "🇧🇴", lat: -16.5004, lng: -68.1193 },
 
-            // AFRICA & OCEANIA
-            { name: "Cape Town, South Africa", lat: -33.9249, lng: 18.4241 },
-            { name: "Johannesburg, South Africa", lat: -26.2041, lng: 28.0473 },
-            { name: "Nairobi, Kenya", lat: -1.2921, lng: 36.8219 },
-            { name: "Tunis, Tunisia", lat: 36.8065, lng: 10.1815 },
-            { name: "Sydney, Australia", lat: -33.8688, lng: 151.2093 },
-            { name: "Melbourne, Australia", lat: -37.8136, lng: 144.9631 },
-            { name: "Brisbane, Australia", lat: -27.4698, lng: 153.0251 },
-            { name: "Perth, Australia", lat: -31.9505, lng: 115.8605 },
-            { name: "Auckland, New Zealand", lat: -36.8485, lng: 174.7633 }
+            // --- EUROPE ---
+            { name: "London, UK", flag: "🇬🇧", lat: 51.5074, lng: -0.1278 },
+            { name: "Manchester, UK", flag: "🇬🇧", lat: 53.4808, lng: -2.2426 },
+            { name: "Edinburgh, UK", flag: "🇬🇧", lat: 55.9533, lng: -3.1883 },
+            { name: "Paris, France", flag: "🇫🇷", lat: 48.8566, lng: 2.3522 },
+            { name: "Lyon, France", flag: "🇫🇷", lat: 45.7640, lng: 4.8357 },
+            { name: "Marseille, France", flag: "🇫🇷", lat: 43.2965, lng: 5.3698 },
+            { name: "Nice, France", flag: "🇫🇷", lat: 43.7102, lng: 7.2620 },
+            { name: "Madrid, Spain", flag: "🇪🇸", lat: 40.4168, lng: -3.7038 },
+            { name: "Barcelona, Spain", flag: "🇪🇸", lat: 41.3851, lng: 2.1734 },
+            { name: "Seville, Spain", flag: "🇪🇸", lat: 37.3891, lng: -5.9845 },
+            { name: "Valencia, Spain", flag: "🇪🇸", lat: 39.4699, lng: -0.3763 },
+            { name: "Lisbon, Portugal", flag: "🇵🇹", lat: 38.7223, lng: -9.1393 },
+            { name: "Porto, Portugal", flag: "🇵🇹", lat: 41.1579, lng: -8.6291 },
+            { name: "Berlin, Germany", flag: "🇩🇪", lat: 52.5200, lng: 13.4050 },
+            { name: "Munich, Germany", flag: "🇩🇪", lat: 48.1351, lng: 11.5820 },
+            { name: "Hamburg, Germany", flag: "🇩🇪", lat: 53.5511, lng: 9.9937 },
+            { name: "Frankfurt, Germany", flag: "🇩🇪", lat: 50.1109, lng: 8.6821 },
+            { name: "Cologne, Germany", flag: "🇩🇪", lat: 50.9375, lng: 6.9603 },
+            { name: "Rome, Italy", flag: "🇮🇹", lat: 41.9028, lng: 12.4964 },
+            { name: "Milan, Italy", flag: "🇮🇹", lat: 45.4642, lng: 9.1900 },
+            { name: "Venice, Italy", flag: "🇮🇹", lat: 45.4408, lng: 12.3155 },
+            { name: "Florence, Italy", flag: "🇮🇹", lat: 43.7696, lng: 11.2558 },
+            { name: "Naples, Italy", flag: "🇮🇹", lat: 40.8518, lng: 14.2681 },
+            { name: "Amsterdam, Netherlands", flag: "🇳🇱", lat: 52.3676, lng: 4.9041 },
+            { name: "Rotterdam, Netherlands", flag: "🇳🇱", lat: 51.9244, lng: 4.4777 },
+            { name: "Brussels, Belgium", flag: "🇧🇪", lat: 50.8503, lng: 4.3517 },
+            { name: "Vienna, Austria", flag: "🇦🇹", lat: 48.2082, lng: 16.3738 },
+            { name: "Prague, Czechia", flag: "🇨🇿", lat: 50.0755, lng: 14.4378 },
+            { name: "Budapest, Hungary", flag: "🇭🇺", lat: 47.4979, lng: 19.0402 },
+            { name: "Stockholm, Sweden", flag: "🇸🇪", lat: 59.3293, lng: 18.0686 },
+            { name: "Gothenburg, Sweden", flag: "🇸🇪", lat: 57.7089, lng: 11.9746 },
+            { name: "Oslo, Norway", flag: "🇳🇴", lat: 59.9139, lng: 10.7522 },
+            { name: "Bergen, Norway", flag: "🇳🇴", lat: 60.3913, lng: 5.3221 },
+            { name: "Helsinki, Finland", flag: "🇫🇮", lat: 60.1699, lng: 24.9384 },
+            { name: "Copenhagen, Denmark", flag: "🇩🇰", lat: 55.6761, lng: 12.5683 },
+            { name: "Aarhus, Denmark", flag: "🇩🇰", lat: 56.1629, lng: 10.2039 },
+            { name: "Warsaw, Poland", flag: "🇵🇱", lat: 52.2297, lng: 21.0122 },
+            { name: "Krakow, Poland", flag: "🇵🇱", lat: 50.0647, lng: 19.9450 },
+            { name: "Gdansk, Poland", flag: "🇵🇱", lat: 54.3520, lng: 18.6466 },
+            { name: "Athens, Greece", flag: "🇬🇷", lat: 37.9838, lng: 23.7275 },
+            { name: "Thessaloniki, Greece", flag: "🇬🇷", lat: 40.6401, lng: 22.9444 },
+            { name: "Zurich, Switzerland", flag: "🇨🇭", lat: 47.3769, lng: 8.5417 },
+            { name: "Geneva, Switzerland", flag: "🇨🇭", lat: 46.2044, lng: 6.1432 },
+            { name: "Dublin, Ireland", flag: "🇮🇪", lat: 53.3498, lng: -6.2603 },
+            { name: "Zagreb, Croatia", flag: "🇭🇷", lat: 45.8150, lng: 15.9819 },
+            { name: "Dubrovnik, Croatia", flag: "🇭🇷", lat: 42.6507, lng: 18.0944 },
+            { name: "Bucharest, Romania", flag: "🇷🇴", lat: 44.4268, lng: 26.1025 },
+            { name: "Sofia, Bulgaria", flag: "🇧🇬", lat: 42.6977, lng: 23.3219 },
+            { name: "Belgrade, Serbia", flag: "🇷🇸", lat: 44.7866, lng: 20.4489 },
+            { name: "Tallinn, Estonia", flag: "🇪🇪", lat: 59.4370, lng: 24.7536 },
+            { name: "Riga, Latvia", flag: "🇱🇻", lat: 56.9496, lng: 24.1052 },
+            { name: "Vilnius, Lithuania", flag: "🇱🇹", lat: 54.6872, lng: 25.2797 },
+            { name: "Reykjavik, Iceland", flag: "🇮🇸", lat: 64.1265, lng: -21.8174 },
+
+            // --- ASIA ---
+            { name: "Istanbul, Turkey", flag: "🇹🇷", lat: 41.0082, lng: 28.9784 },
+            { name: "Ankara, Turkey", flag: "🇹🇷", lat: 39.9334, lng: 32.8597 },
+            { name: "Antalya, Turkey", flag: "🇹🇷", lat: 36.8969, lng: 30.7133 },
+            { name: "Tokyo, Japan", flag: "🇯🇵", lat: 35.6762, lng: 139.6503 },
+            { name: "Osaka, Japan", flag: "🇯🇵", lat: 34.6937, lng: 135.5023 },
+            { name: "Kyoto, Japan", flag: "🇯🇵", lat: 35.0116, lng: 135.7681 },
+            { name: "Sapporo, Japan", flag: "🇯🇵", lat: 43.0618, lng: 141.3545 },
+            { name: "Fukuoka, Japan", flag: "🇯🇵", lat: 33.5902, lng: 130.4017 },
+            { name: "Seoul, South Korea", flag: "🇰🇷", lat: 37.5665, lng: 126.9780 },
+            { name: "Busan, South Korea", flag: "🇰🇷", lat: 35.1796, lng: 129.0756 },
+            { name: "Taipei, Taiwan", flag: "🇹🇼", lat: 25.0330, lng: 121.5654 },
+            { name: "Kaohsiung, Taiwan", flag: "🇹🇼", lat: 22.6273, lng: 120.3014 },
+            { name: "Bangkok, Thailand", flag: "🇹🇭", lat: 13.7563, lng: 100.5018 },
+            { name: "Chiang Mai, Thailand", flag: "🇹🇭", lat: 18.7883, lng: 98.9853 },
+            { name: "Singapore", flag: "🇸🇬", lat: 1.3521, lng: 103.8198 },
+            { name: "Kuala Lumpur, Malaysia", flag: "🇲🇾", lat: 3.1390, lng: 101.6869 },
+            { name: "Jakarta, Indonesia", flag: "🇮🇩", lat: -6.2088, lng: 106.8456 },
+            { name: "Bali (Denpasar), Indonesia", flag: "🇮🇩", lat: -8.6705, lng: 115.2126 },
+            { name: "Manila, Philippines", flag: "🇵🇭", lat: 14.5995, lng: 120.9842 },
+            { name: "Cebu City, Philippines", flag: "🇵🇭", lat: 10.3157, lng: 123.8854 },
+            { name: "Ho Chi Minh City, Vietnam", flag: "🇻🇳", lat: 10.8231, lng: 106.6297 },
+            { name: "Hanoi, Vietnam", flag: "🇻🇳", lat: 21.0285, lng: 105.8542 },
+            { name: "Dubai, UAE", flag: "🇦🇪", lat: 25.2048, lng: 55.2708 },
+            { name: "Abu Dhabi, UAE", flag: "🇦🇪", lat: 24.4539, lng: 54.3773 },
+            { name: "Doha, Qatar", flag: "🇶🇦", lat: 25.2854, lng: 51.5310 },
+            { name: "Tel Aviv, Israel", flag: "🇮🇱", lat: 32.0853, lng: 34.7818 },
+            { name: "Jerusalem, Israel", flag: "🇮🇱", lat: 31.7683, lng: 35.2137 },
+            { name: "Mumbai, India", flag: "🇮🇳", lat: 19.0760, lng: 72.8777 },
+            { name: "New Delhi, India", flag: "🇮🇳", lat: 28.6139, lng: 77.2090 },
+            { name: "Bangalore, India", flag: "🇮🇳", lat: 12.9716, lng: 77.5946 },
+            { name: "Colombo, Sri Lanka", flag: "🇱🇰", lat: 6.9271, lng: 79.8612 },
+            { name: "Ulaanbaatar, Mongolia", flag: "🇲🇳", lat: 47.9181, lng: 106.9176 },
+
+            // --- AFRICA ---
+            { name: "Cape Town, South Africa", flag: "🇿🇦", lat: -33.9249, lng: 18.4241 },
+            { name: "Johannesburg, South Africa", flag: "🇿🇦", lat: -26.2041, lng: 28.0473 },
+            { name: "Durban, South Africa", flag: "🇿🇦", lat: -29.8587, lng: 31.0218 },
+            { name: "Nairobi, Kenya", flag: "🇰🇪", lat: -1.2921, lng: 36.8219 },
+            { name: "Tunis, Tunisia", flag: "🇹🇳", lat: 36.8065, lng: 10.1815 },
+            { name: "Cairo, Egypt", flag: "🇪🇬", lat: 30.0444, lng: 31.2357 },
+            { name: "Marrakech, Morocco", flag: "🇲🇦", lat: 31.6295, lng: -7.9811 },
+            { name: "Casablanca, Morocco", flag: "🇲🇦", lat: 33.5731, lng: -7.5898 },
+            { name: "Dakar, Senegal", flag: "🇸🇳", lat: 14.7167, lng: -17.4677 },
+            { name: "Accra, Ghana", flag: "🇬🇭", lat: 5.6037, lng: -0.1870 },
+            { name: "Lagos, Nigeria", flag: "🇳🇬", lat: 6.5244, lng: 3.3792 },
+
+            // --- OCEANIA ---
+            { name: "Sydney, Australia", flag: "🇦🇺", lat: -33.8688, lng: 151.2093 },
+            { name: "Melbourne, Australia", flag: "🇦🇺", lat: -37.8136, lng: 144.9631 },
+            { name: "Brisbane, Australia", flag: "🇦🇺", lat: -27.4698, lng: 153.0251 },
+            { name: "Perth, Australia", flag: "🇦🇺", lat: -31.9505, lng: 115.8605 },
+            { name: "Adelaide, Australia", flag: "🇦🇺", lat: -34.9285, lng: 138.6007 },
+            { name: "Hobart, Australia", flag: "🇦🇺", lat: -42.8821, lng: 147.3272 },
+            { name: "Auckland, New Zealand", flag: "🇳🇿", lat: -36.8485, lng: 174.7633 },
+            { name: "Wellington, New Zealand", flag: "🇳🇿", lat: -41.2865, lng: 174.7762 },
+            { name: "Christchurch, New Zealand", flag: "🇳🇿", lat: -43.5321, lng: 172.6362 }
         ];
 
-        let map, mly, guessMarker, actualLocation, resultLine, resultMarker, currentCityName;
+        let map, mly, guessMarker, actualLocation, resultLine, resultMarker, currentCity;
 
         // ============================================
         // 3. MAIN LOGIC
@@ -322,6 +451,18 @@
                 accessToken: MAPILLARY_TOKEN,
                 container: 'mly',
                 component: { cover: false }
+            });
+
+            // COMPASS ROTATION LOGIC
+            mly.on('bearing', (e) => {
+                const arrow = document.getElementById('compass-arrow');
+                // Rotate the arrow opposite to the view to point North relative to screen
+                // Or rotate the compass container. Let's rotate the inner arrow to point North.
+                // Mapillary bearing is where we are looking. If we look 90deg (East), North is -90deg.
+                // So we rotate the arrow by -bearing.
+                if(arrow) {
+                    arrow.style.transform = `rotate(${-e.bearing}deg)`;
+                }
             });
 
             // Map Tap Logic
@@ -347,7 +488,6 @@
 
         // TOGGLE MINI-MAP
         function toggleMap() {
-            // Haptic
             if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
 
             const cont = document.getElementById('map-container');
@@ -365,7 +505,6 @@
 
         // RESTART GAME
         function startNewGame() {
-            // Feedback
             if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
 
             document.getElementById('loading').classList.remove('hidden');
@@ -391,6 +530,7 @@
             btn.disabled = true;
 
             map.setView([20,0], 2);
+            document.getElementById('accuracy-bar').style.width = "0%";
 
             findRandomImage(0);
         }
@@ -400,17 +540,16 @@
             if(attempts > 6) { 
                 document.getElementById('status-text').innerText = "Retrying (Poor Signal?)..."; 
             }
-            if(attempts > 12) { attempts = 0; } // Soft reset loop
+            if(attempts > 12) { attempts = 0; } 
 
-            // 1. Pick City
             const city = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
             
-            // 2. Random Offset (approx 3km)
-            const range = 0.035;
+            // Random Offset (approx 3-4km radius)
+            const range = 0.04;
             const rLat = city.lat + (Math.random() * range * 2 - range);
             const rLng = city.lng + (Math.random() * range * 2 - range);
 
-            // 3. 500m Bounding Box for Search
+            // Bounding Box
             const box = 0.005; 
             const bbox = `${rLng-box},${rLat-box},${rLng+box},${rLat+box}`;
 
@@ -423,14 +562,12 @@
                 if (data.data && data.data.length > 0) {
                     const img = data.data[0];
                     actualLocation = { lat: img.geometry.coordinates[1], lng: img.geometry.coordinates[0] };
-                    currentCityName = city.name;
+                    currentCity = city;
 
-                    // Move Viewer
                     mly.moveTo(img.id)
                         .then(() => document.getElementById('loading').classList.add('hidden'))
                         .catch(() => findRandomImage(attempts + 1));
                 } else {
-                    // Retry different city
                     findRandomImage(attempts + 1);
                 }
             } catch (e) {
@@ -438,16 +575,39 @@
             }
         }
 
+        // SHARE RESULT
+        let lastScore = 0;
+        let lastDist = "";
+        function shareResult() {
+            const link = "t.me/geogur_bot/app"; 
+            const text = `I scored ${lastScore} pts (${lastDist}) in ${currentCity.name} ${currentCity.flag || ''}! 🎯 Can you beat me?`;
+            
+            const fullUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
+            tg.openTelegramLink(fullUrl);
+        }
+
         // CALCULATE AND SHOW RESULT
         function submitGuess() {
             if(!guessMarker || !actualLocation) return;
-
-            // HAPTIC SUCCESS
             if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
 
             const uLat = guessMarker.getLatLng();
             const aLat = L.latLng(actualLocation.lat, actualLocation.lng);
-            const dist = Math.round(map.distance(uLat, aLat) / 1000);
+            const distMeters = map.distance(uLat, aLat); // Meters
+            
+            // EXACT DISTANCE LOGIC
+            let distDisplay = "";
+            if (distMeters < 1000) {
+                distDisplay = Math.round(distMeters) + " m";
+            } else {
+                distDisplay = (distMeters / 1000).toFixed(1) + " km";
+            }
+            lastDist = distDisplay;
+
+            // POINTS LOGIC (Exponential Decay)
+            // 0m = 5000pts, 2000km = ~1800pts
+            const points = Math.round(5000 * Math.exp(-distMeters / 2000));
+            lastScore = points;
 
             // 1. Full Screen Map
             document.getElementById('mobile-map-toggle').style.display = 'none';
@@ -464,35 +624,39 @@
                 color: 'red', weight: 3, dashArray: '5, 10' 
             }).addTo(map);
 
-
-            // 3. SMART ZOOM LOGIC
-            // The result sheet at the bottom takes up roughly 35-40% of screen height.
-            // We use 'paddingBottomRight' to ensure the line is drawn in the TOP part of the screen.
-            const pHeight = window.innerHeight * 0.40; // 40% height buffer
-
+            // 3. Zoom
+            const pHeight = window.innerHeight * 0.45;
             map.fitBounds(resultLine.getBounds(), {
                 paddingTopLeft: [50, 50],
-                paddingBottomRight: [50, pHeight], // IMPORTANT: Keeps result visible above sheet
-                maxZoom: 12 // Prevent "too much zoom" when accuracy is very high
+                paddingBottomRight: [50, pHeight],
+                maxZoom: 16
             });
 
-
             // 4. Fill Data
-            document.getElementById('distance-display').innerText = dist + " km";
-            document.getElementById('actual-city-name').innerText = currentCityName;
-
-            // Accuracy Bar (Max score 5000pts logic visually)
-            let percentage = 0;
-            if(dist < 5) percentage = 100;
-            else if(dist < 50) percentage = 90;
-            else if(dist < 2000) percentage = Math.max(10, 90 - (dist/50));
-            else percentage = 5;
+            document.getElementById('distance-display').innerText = distDisplay;
+            document.getElementById('points-display').innerText = points + " pts";
             
+            // ADD FLAG TO CITY NAME
+            const flag = currentCity.flag ? `<span class="flag-icon">${currentCity.flag}</span>` : "";
+            document.getElementById('actual-city-name').innerHTML = currentCity.name + flag;
+
+            // Accuracy Bar
+            let percentage = (points / 5000) * 100;
             document.getElementById('accuracy-bar').style.width = percentage + "%";
 
             // 5. Reveal Sheet
             setTimeout(() => {
                 document.getElementById('result-sheet').classList.add('show');
+                
+                // CONFETTI IF GOOD SCORE (>4000 pts or <1km)
+                if(points > 4000) {
+                    confetti({
+                        particleCount: 150,
+                        spread: 70,
+                        origin: { y: 0.6 },
+                        zIndex: 3500
+                    });
+                }
             }, 500);
         }
 
