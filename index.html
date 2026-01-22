@@ -606,7 +606,7 @@
 
             // POINTS LOGIC (Exponential Decay)
             // 0m = 5000pts, 2000km = ~1800pts
-            const points = Math.round(5000 * Math.exp(-distMeters / 2000));
+            const points = Math.round(5000 * Math.exp(-distMeters / 6000));
             lastScore = points;
 
             // 1. Full Screen Map
