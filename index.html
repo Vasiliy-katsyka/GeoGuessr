@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GeoGuessr Ultimate</title>
+    <title>GeoDuel Ultimate</title>
     
     <!-- Telegram Web App -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -16,100 +16,136 @@
     <style>
         /* ==================== THEME & RESET ==================== */
         :root {
-            --bg-color: var(--tg-theme-bg-color, #121212);
-            --text-color: var(--tg-theme-text-color, #ffffff);
-            --button-color: var(--tg-theme-button-color, #3390ec);
-            --button-text: var(--tg-theme-button-text-color, #ffffff);
-            --secondary-bg: var(--tg-theme-secondary-bg-color, #232e3c);
-            --accent-green: #2ecc71;
-            --accent-red: #e74c3c;
-            --accent-gold: #f1c40f;
+            --bg-color: #0f0f12; /* Darker, cleaner bg */
+            --text-color: #ffffff;
+            --primary-grad: linear-gradient(135deg, #00C6FF 0%, #0072FF 100%);
+            --purple-grad: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
+            --green-grad: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            --glass-bg: rgba(20, 20, 25, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --blur: 15px;
         }
 
         body, html { 
             margin: 0; padding: 0; height: 100%; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, sans-serif;
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
             background: var(--bg-color); color: var(--text-color);
             overflow: hidden; -webkit-tap-highlight-color: transparent;
+        }
+
+        /* GLASSMORPHISM UTILITY */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--blur));
+            -webkit-backdrop-filter: blur(var(--blur));
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         }
 
         /* ==================== LAYERS ==================== */
         #mly { width: 100%; height: 100%; position: absolute; top:0; left:0; z-index: 1; }
         
+        /* Mapillary Control Override: Move controls down to avoid Telegram Header */
+        .mapillary-sequence-controls, .mapillary-direction-arrows {
+            top: 60px !important; /* Move play/nav buttons down */
+        }
+        
         /* ==================== MENUS & UI ==================== */
         .full-screen-menu {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--bg-color); z-index: 5000;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #000000 100%);
+            z-index: 5000;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             transition: opacity 0.3s ease;
+            padding: 20px; box-sizing: border-box;
         }
         
-        .menu-title { font-size: 2.5rem; font-weight: 900; margin-bottom: 30px; letter-spacing: -1px; text-align: center; }
-        .menu-subtitle { font-size: 1rem; color: #888; margin-bottom: 40px; text-align: center; max-width: 80%; }
+        .menu-title { 
+            font-size: 3rem; font-weight: 800; margin-bottom: 10px; 
+            background: var(--primary-grad); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            text-align: center; letter-spacing: -1px;
+        }
+        .menu-subtitle { font-size: 1.1rem; color: #a0a0a0; margin-bottom: 50px; text-align: center; }
 
         .btn-main {
-            width: 80%; max-width: 300px; padding: 18px; margin: 8px 0;
-            border: none; border-radius: 16px; font-size: 1.1rem; font-weight: 700;
-            cursor: pointer; transition: transform 0.1s;
-            display: flex; align-items: center; justify-content: center; gap: 10px;
-            color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            width: 100%; max-width: 320px; padding: 18px; margin: 10px 0;
+            border: none; border-radius: 18px; font-size: 1.2rem; font-weight: 600;
+            cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+            color: white; text-transform: uppercase; letter-spacing: 1px;
+            position: relative; overflow: hidden;
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
         }
-        .btn-main:active { transform: scale(0.96); }
+        .btn-main:active { transform: scale(0.97); }
+        .btn-main::before {
+            content: ''; position: absolute; top:0; left:0; width:100%; height:100%;
+            background: linear-gradient(rgba(255,255,255,0.2), transparent);
+            opacity: 0.5;
+        }
 
-        /* Colors for buttons */
-        .btn-endless { background: linear-gradient(135deg, #3390ec, #2980b9); }
-        .btn-challenge { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
-        .btn-friend { background: linear-gradient(135deg, #27ae60, #219150); }
-        .btn-back { background: #555; margin-top: 20px; }
+        .btn-blue { background: var(--primary-grad); }
+        .btn-purple { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .btn-green { background: var(--green-grad); }
+        .btn-dark { background: #333; border: 1px solid #555; }
 
         .input-code {
-            padding: 15px; border-radius: 12px; border: 2px solid #555;
-            background: #222; color: white; font-size: 20px; width: 70%;
-            text-align: center; margin: 20px 0; letter-spacing: 3px; font-weight: bold;
-            text-transform: uppercase;
+            padding: 16px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.5); color: white; font-size: 24px; width: 80%;
+            text-align: center; margin: 20px 0; letter-spacing: 5px; font-weight: bold;
+            text-transform: uppercase; outline: none;
         }
+        .input-code:focus { border-color: #00C6FF; }
 
         /* ==================== GAME HUD ==================== */
         #top-hud {
-            position: absolute; top: 0; left: 0; width: 100%;
-            padding: 10px 15px; box-sizing: border-box;
+            position: absolute; 
+            /* Push down for Telegram Header */
+            top: 50px; left: 0; width: 100%;
+            padding: 0 20px; box-sizing: border-box;
             display: flex; justify-content: space-between; align-items: flex-start;
             z-index: 100; pointer-events: none;
         }
 
         #timer-box {
-            background: rgba(0,0,0,0.7); padding: 8px 12px; border-radius: 8px;
-            font-size: 1.2rem; font-weight: 900; color: white;
-            border: 2px solid white; display: none; /* Hidden by default */
+            color: white; padding: 10px 16px; border-radius: 14px;
+            font-size: 1.4rem; font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            display: none;
+            backdrop-filter: blur(10px); background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.1);
         }
-        #timer-box.warning { border-color: var(--accent-red); color: var(--accent-red); animation: pulse 1s infinite; }
+        #timer-box.warning { color: #ff6b6b; border-color: #ff6b6b; animation: pulse 1s infinite; }
 
         #score-box {
-            background: rgba(0,0,0,0.7); padding: 8px 12px; border-radius: 8px;
-            font-size: 0.9rem; font-weight: bold; text-align: right;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
+            padding: 10px 15px; border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.1);
+            font-size: 0.9rem; font-weight: 600; text-align: right;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
-        .score-row { margin-bottom: 2px; }
-        .score-val { color: var(--accent-gold); font-size: 1.1rem; }
-
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .score-row { margin-bottom: 4px; display: flex; align-items: center; justify-content: flex-end; gap: 8px;}
+        .score-val { color: #f1c40f; font-size: 1.1rem; font-weight: 800; font-family: monospace;}
 
         /* ==================== MAP & CONTROLS ==================== */
         #mobile-map-toggle {
-            position: absolute; bottom: 20px; right: 20px;
-            width: 60px; height: 60px; border-radius: 50%;
-            background: var(--button-color); color: white;
-            font-size: 26px; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            position: absolute; bottom: 30px; right: 20px;
+            width: 65px; height: 65px; border-radius: 50%;
+            background: var(--primary-grad); color: white;
+            font-size: 28px; border: none; box-shadow: 0 8px 25px rgba(0, 114, 255, 0.4);
             z-index: 100; display: flex; justify-content: center; align-items: center;
+            transition: transform 0.2s;
         }
+        #mobile-map-toggle:active { transform: scale(0.9); }
 
         #map-container {
-            position: absolute; bottom: 90px; right: 20px;
+            position: absolute; bottom: 110px; right: 20px;
             width: 90vw; max-width: 450px; height: 45vh;
-            background: white; border-radius: 16px; border: 4px solid #fff;
+            background: #fff; border-radius: 24px; border: 4px solid #fff;
             box-shadow: 0 20px 50px rgba(0,0,0,0.6); z-index: 200;
             transform: scale(0); opacity: 0; pointer-events: none;
-            transform-origin: bottom right; transition: all 0.35s cubic-bezier(0.19, 1, 0.22, 1);
-            display: flex; flex-direction: column;
+            transform-origin: bottom right; transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+            display: flex; flex-direction: column; overflow: hidden;
         }
         #map-container.open { transform: scale(1); opacity: 1; pointer-events: all; }
         #map { flex-grow: 1; width: 100%; }
@@ -121,36 +157,40 @@
         }
 
         #confirm-btn {
-            width: 100%; padding: 18px; background: #7f8c8d; color: white;
+            width: 100%; padding: 20px; background: #555; color: rgba(255,255,255,0.5);
             font-weight: 800; font-size: 16px; border: none; text-transform: uppercase;
-            cursor: not-allowed; transition: 0.3s;
+            cursor: not-allowed; transition: 0.3s; letter-spacing: 1px;
         }
-        #confirm-btn.active { background: var(--button-color); cursor: pointer; }
+        #confirm-btn.active { background: var(--primary-grad); color: white; cursor: pointer; }
 
         /* ==================== RESULT SHEET ==================== */
         #result-sheet {
             position: absolute; bottom: 0; left: 0; width: 100%;
-            background: var(--secondary-bg); 
-            border-top-left-radius: 24px; border-top-right-radius: 24px;
+            background: rgba(20, 20, 25, 0.95);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border-top-left-radius: 30px; border-top-right-radius: 30px;
+            border-top: 1px solid rgba(255,255,255,0.1);
             box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
             z-index: 3000; transform: translateY(110%); transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
-            padding: 25px 20px 40px 20px; box-sizing: border-box;
-            display: flex; flex-direction: column; gap: 15px; color: var(--text-color);
+            padding: 30px 25px 40px 25px; box-sizing: border-box;
+            display: flex; flex-direction: column; gap: 20px; color: white;
         }
         #result-sheet.show { transform: translateY(0); }
 
         .result-row { display: flex; justify-content: space-between; align-items: flex-end; }
-        .big-text { font-size: 2rem; font-weight: 900; line-height: 1; }
-        .sub-text { color: #888; font-size: 0.9rem; }
+        .big-text { font-size: 2.2rem; font-weight: 900; line-height: 1; margin-bottom: 5px; }
+        .sub-text { color: #aaa; font-size: 1rem; }
 
-        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+        .btn-group { display: flex; gap: 15px; margin-top: 10px; }
         .btn-primary {
-            background: var(--button-color); color: white; padding: 16px;
-            border: none; border-radius: 12px; font-size: 16px; font-weight: bold; flex: 1;
+            background: var(--primary-grad); color: white; padding: 18px;
+            border: none; border-radius: 16px; font-size: 16px; font-weight: bold; flex: 1;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); cursor: pointer;
         }
         .btn-secondary {
             background: rgba(255,255,255,0.1); color: white; padding: 16px;
-            border: none; border-radius: 12px; font-size: 20px; width: 60px;
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; 
+            font-size: 22px; width: 70px; cursor: pointer;
         }
 
         /* ==================== SUMMARY MODAL ==================== */
@@ -160,22 +200,35 @@
             display: none; flex-direction: column; align-items: center; justify-content: center;
             text-align: center; color: white;
         }
-        .summary-score { font-size: 3rem; font-weight: 900; color: var(--accent-gold); margin: 20px 0; }
+        .summary-score { 
+            font-size: 4rem; font-weight: 900; 
+            background: var(--primary-grad); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            margin: 20px 0; 
+        }
 
         .hidden { display: none !important; }
 
         /* Loading Spinner */
         #loading {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--bg-color); z-index: 4000;
+            background: #0f0f12; z-index: 4000;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
         .spinner {
-            width: 40px; height: 40px; border: 4px solid var(--button-color);
-            border-top: 4px solid transparent; border-radius: 50%;
+            width: 50px; height: 50px; border: 4px solid rgba(255,255,255,0.1);
+            border-top: 4px solid #00C6FF; border-radius: 50%;
             animation: spin 0.8s linear infinite; margin-bottom: 20px;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        /* Toggle Buttons for MP */
+        .toggle-group { display: flex; gap: 10px; width: 100%; margin-bottom: 20px; }
+        .toggle-btn {
+            flex: 1; padding: 15px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(0,0,0,0.3); color: #aaa; font-weight: 600; cursor: pointer; transition: 0.3s;
+        }
+        .toggle-btn.selected { background: var(--primary-grad); color: white; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
 
     </style>
 </head>
@@ -184,56 +237,59 @@
     <!-- 1. LOADING SCREEN -->
     <div id="loading">
         <div class="spinner"></div>
-        <h3 id="loading-text">Loading Assets...</h3>
+        <h3 id="loading-text" style="color: #666; font-weight: 400;">Preparing Map...</h3>
     </div>
 
     <!-- 2. MAIN MENU -->
     <div id="main-menu" class="full-screen-menu hidden">
-        <div class="menu-title">🌍 GeoGuessr<br>Ultimate</div>
-        <div class="menu-subtitle">Explore the world, challenge friends.</div>
+        <div class="menu-title">GeoDuel<br>Ultimate</div>
+        <div class="menu-subtitle">Explore the world & challenge friends</div>
 
-        <button class="btn-main btn-endless" onclick="window.startEndless()">
+        <button class="btn-main btn-blue" onclick="window.startEndless()">
             <span>∞</span> Endless Mode
         </button>
-        <button class="btn-main btn-challenge" onclick="window.startChallenge()">
+        <button class="btn-main btn-purple" onclick="window.startChallenge()">
             <span>⏱️</span> Challenge Mode
         </button>
-        <button class="btn-main btn-friend" onclick="window.openFriendMenu()">
+        <button class="btn-main btn-green" onclick="window.openFriendMenu()">
             <span>👥</span> Friend Mode
         </button>
     </div>
 
     <!-- 3. FRIEND / MULTIPLAYER MENU -->
     <div id="friend-menu" class="full-screen-menu hidden">
-        <h2 style="margin-bottom: 20px;">Friend Mode</h2>
+        <h2 style="margin-bottom: 30px; font-size: 2rem;">Friend Mode</h2>
         
         <!-- Create -->
-        <div style="background:#222; padding:20px; border-radius:16px; width:85%; max-width:350px; margin-bottom:20px;">
-            <h4 style="margin:0 0 10px 0; color:#aaa;">CREATE ROOM</h4>
-            <div style="display:flex; gap:10px; justify-content:center; margin-bottom:15px;">
-                <button id="mp-mode-endless" class="btn-secondary" style="width:auto; font-size:14px; background:var(--button-color);" onclick="window.selectMpMode('endless')">Endless</button>
-                <button id="mp-mode-challenge" class="btn-secondary" style="width:auto; font-size:14px;" onclick="window.selectMpMode('challenge')">Challenge</button>
+        <div class="glass-panel" style="padding:25px; width:100%; max-width:350px; margin-bottom:25px;">
+            <h4 style="margin:0 0 15px 0; color:#aaa; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;">Create Room</h4>
+            <div class="toggle-group">
+                <button id="mp-mode-endless" class="toggle-btn selected" onclick="window.selectMpMode('endless')">Endless</button>
+                <button id="mp-mode-challenge" class="toggle-btn" onclick="window.selectMpMode('challenge')">Challenge</button>
             </div>
-            <button class="btn-main btn-friend" style="width:100%; box-sizing:border-box;" onclick="window.createRoom()">Create & Play</button>
+            <button class="btn-main btn-green" style="width:100%; max-width:none; margin:0;" onclick="window.createRoom()">Create & Play</button>
         </div>
 
-        <div style="color:#555; font-weight:bold;">— OR —</div>
+        <div style="color:#555; font-weight:bold; margin-bottom: 25px;">— OR —</div>
 
         <!-- Join -->
-        <div style="width:85%; max-width:350px; text-align:center;">
-            <input type="text" id="join-code" class="input-code" placeholder="ROOM CODE" maxlength="5">
-            <button class="btn-main btn-endless" style="width:100%; box-sizing:border-box;" onclick="window.joinRoom()">Join Room</button>
+        <div style="width:100%; max-width:350px; text-align:center;">
+            <input type="text" id="join-code" class="input-code" placeholder="CODE" maxlength="5">
+            <button class="btn-main btn-blue" style="width:100%; max-width:none; margin:0;" onclick="window.joinRoom()">Join Room</button>
         </div>
 
-        <button class="btn-main btn-back" style="width:auto; padding: 10px 30px;" onclick="window.showMainMenu()">Back</button>
+        <button class="btn-main btn-dark" style="width:auto; padding: 12px 30px; margin-top: 40px;" onclick="window.showMainMenu()">Back</button>
     </div>
 
     <!-- 4. LOBBY SCREEN -->
     <div id="lobby-screen" class="full-screen-menu hidden">
-        <h1 id="lobby-code-display" style="font-size:3rem; color:var(--accent-gold); letter-spacing:5px;">----</h1>
-        <p>Share this code with your friend.</p>
-        <div id="lobby-status" style="margin-top:20px; color:#aaa; animation:pulse 1s infinite;">Waiting for player...</div>
-        <button class="btn-main btn-back" onclick="window.location.reload()">Cancel</button>
+        <h1 id="lobby-code-display" style="font-size:4rem; background: var(--primary-grad); -webkit-background-clip:text; -webkit-text-fill-color: transparent; letter-spacing:8px; margin-bottom: 10px;">----</h1>
+        <p style="color:#888;">Share this code with your friend.</p>
+        <div id="lobby-status" style="margin-top:30px; color:#fff; font-size: 1.2rem; font-weight: 600; display:flex; align-items:center; gap:10px;">
+            <div class="spinner" style="width:20px; height:20px; margin:0; border-width:2px;"></div> 
+            Waiting for player...
+        </div>
+        <button class="btn-main btn-dark" style="margin-top: 50px;" onclick="window.location.reload()">Cancel</button>
     </div>
 
     <!-- 5. GAME UI -->
@@ -244,9 +300,9 @@
         <div id="timer-box">02:00</div>
         
         <div id="score-box">
-            <div class="score-row" id="round-indicator" style="display:none; color:#aaa; font-size:0.8rem;">ROUND 1/5</div>
-            <div class="score-row">YOU: <span id="score-me" class="score-val">0</span></div>
-            <div class="score-row" id="score-opp-row" style="display:none;">OPP: <span id="score-opp" class="score-val" style="color:var(--accent-red)">0</span></div>
+            <div class="score-row" id="round-indicator" style="display:none; color:#aaa; font-size:0.8rem; text-transform:uppercase;">Round 1/5</div>
+            <div class="score-row">YOU <span id="score-me" class="score-val">0</span></div>
+            <div class="score-row" id="score-opp-row" style="display:none;">OPP <span id="score-opp" class="score-val" style="color:#ff6b6b">0</span></div>
         </div>
     </div>
 
@@ -255,7 +311,7 @@
 
     <div id="map-container">
         <div id="map"></div>
-        <button id="confirm-btn" onclick="window.submitGuess()">TAP MAP TO GUESS</button>
+        <button id="confirm-btn" onclick="window.submitGuess()">Tap map to guess</button>
     </div>
 
     <!-- Result Sheet -->
@@ -263,19 +319,19 @@
         <div class="result-row">
             <div>
                 <div class="big-text" id="res-dist">0 m</div>
-                <div style="color:var(--accent-gold); font-weight:bold; font-size:1.2rem;" id="res-pts">+0 pts</div>
+                <div style="color:#f1c40f; font-weight:bold; font-size:1.4rem;" id="res-pts">+0 pts</div>
             </div>
             <div style="text-align:right;">
-                <div style="font-weight:bold;">Location</div>
+                <div style="font-weight:bold; font-size:1.1rem; color: #ddd;">Location</div>
                 <div id="res-loc-name" class="sub-text">City, Country</div>
             </div>
         </div>
 
         <!-- Multiplayer / Challenge specific result info -->
-        <div id="res-multi-info" style="background:#333; padding:10px; border-radius:8px; margin-top:5px; display:none;">
-            <div style="display:flex; justify-content:space-between;">
-                <span>Opponent:</span>
-                <span id="res-opp-dist" style="color:var(--accent-red); font-weight:bold;">--</span>
+        <div id="res-multi-info" style="background:rgba(255,255,255,0.08); padding:15px; border-radius:12px; display:none;">
+            <div style="display:flex; justify-content:space-between; align-items: center;">
+                <span style="color:#aaa; font-weight:600;">Opponent:</span>
+                <span id="res-opp-dist" style="color:#ff6b6b; font-weight:bold; font-size: 1.2rem;">--</span>
             </div>
         </div>
 
@@ -287,10 +343,10 @@
 
     <!-- 6. SUMMARY MODAL (Challenge Mode End) -->
     <div id="summary-modal">
-        <h1>GAME OVER</h1>
-        <p>Total Score</p>
+        <h1 style="text-transform: uppercase; letter-spacing: 2px;">Game Over</h1>
+        <p style="color:#aaa;">Total Score</p>
         <div class="summary-score" id="final-score">0</div>
-        <button class="btn-main btn-endless" onclick="window.location.reload()">Back to Menu</button>
+        <button class="btn-main btn-blue" onclick="window.location.reload()">Back to Menu</button>
     </div>
 
     <!-- SCRIPTS -->
@@ -319,24 +375,25 @@
 
         // ================= GLOBAL STATE =================
         const STATE = {
-            mode: 'menu', // endless, challenge, multi
-            mpRole: null, // host, guest
+            mode: 'menu', 
+            mpRole: null, 
             gameId: null,
             round: 1,
             maxRounds: 5,
             score: 0,
             oppScore: 0,
             timer: null,
-            timeLeft: 120, // 2 minutes
+            timeLeft: 120, 
             currentLoc: null,
             isLocked: false,
-            mpModeSelected: 'endless' // for host creation
+            mpModeSelected: 'endless',
+            resultShown: false // Prevent double firing
         };
 
         const MLY_TOKEN = 'MLY|26213154491618951|523c0418de2d6a8118aefdab3284d6c2'; 
         let map, mly, guessMarker, resultLine, resultMarker, oppMarker, oppLine;
 
-        // ================= LOCATION DATA (150+ CITIES) =================
+        // ================= LOCATION DATA =================
         const LOCATIONS = [
             // RUSSIA
             { name: "Saint Petersburg, Russia", flag: "🇷🇺", lat: 59.9311, lng: 30.3609 },
@@ -426,9 +483,13 @@
                 btn.classList.add('active');
                 btn.innerText = "CONFIRM GUESS";
                 btn.disabled = false;
+                
+                // Haptic
+                if(window.Telegram?.WebApp?.HapticFeedback) {
+                     window.Telegram.WebApp.HapticFeedback.selectionChanged();
+                }
             });
 
-            // UI Init
             document.getElementById('loading').classList.add('hidden');
             document.getElementById('main-menu').classList.remove('hidden');
         }
@@ -446,13 +507,11 @@
 
         window.selectMpMode = (mode) => {
             STATE.mpModeSelected = mode;
-            document.getElementById('mp-mode-endless').style.background = mode === 'endless' ? '#3390ec' : 'rgba(255,255,255,0.1)';
-            document.getElementById('mp-mode-challenge').style.background = mode === 'challenge' ? '#3390ec' : 'rgba(255,255,255,0.1)';
+            document.getElementById('mp-mode-endless').classList.toggle('selected', mode === 'endless');
+            document.getElementById('mp-mode-challenge').classList.toggle('selected', mode === 'challenge');
         };
 
         // ================= GAME MODES =================
-
-        // 1. ENDLESS
         window.startEndless = () => {
             STATE.mode = 'endless';
             STATE.score = 0;
@@ -460,7 +519,6 @@
             startGameLoop();
         };
 
-        // 2. CHALLENGE (5 Rounds, 2 Mins)
         window.startChallenge = () => {
             STATE.mode = 'challenge';
             STATE.round = 1;
@@ -471,14 +529,11 @@
         };
 
         function updateHUD() {
-            // Hide Menus
             document.querySelectorAll('.full-screen-menu').forEach(el => el.classList.add('hidden'));
             
-            // Score
             document.getElementById('score-me').innerText = STATE.score;
-            document.getElementById('score-opp-row').style.display = (STATE.mode === 'multi') ? 'block' : 'none';
+            document.getElementById('score-opp-row').style.display = (STATE.mode === 'multi') ? 'flex' : 'none';
             
-            // Round & Timer
             if (STATE.mode === 'challenge' || (STATE.mode === 'multi' && STATE.mpModeSelected === 'challenge')) {
                 document.getElementById('round-indicator').style.display = 'block';
                 document.getElementById('round-indicator').innerText = `ROUND ${STATE.round}/${STATE.maxRounds}`;
@@ -492,7 +547,6 @@
         function startGameLoop() {
             resetMapUI();
             
-            // MP Logic handles location picking separately
             if (STATE.mode !== 'multi') {
                 pickRandomLocation().then(loc => {
                     STATE.currentLoc = loc;
@@ -500,7 +554,6 @@
                     if(STATE.mode === 'challenge') startTimer(120);
                 });
             } else {
-                // Multiplayer: Waiting for DB trigger to load location
                 document.getElementById('confirm-btn').innerText = "WAITING FOR SYNC...";
             }
         }
@@ -512,7 +565,6 @@
             STATE.mpRole = 'host';
             STATE.mode = 'multi';
             
-            // Create in DB
             set(ref(db, 'games/' + code), {
                 status: 'waiting',
                 mode: STATE.mpModeSelected,
@@ -541,7 +593,7 @@
                     update(ref(db, 'games/' + code), { status: 'starting' });
                     
                     document.getElementById('friend-menu').classList.add('hidden');
-                    document.getElementById('lobby-status').innerText = "Joining...";
+                    document.getElementById('lobby-status').innerHTML = '<div class="spinner" style="width:20px;height:20px;margin:0;border-width:2px;"></div> Joining...';
                     document.getElementById('lobby-screen').classList.remove('hidden');
                     
                     listenToGame(code);
@@ -556,20 +608,20 @@
                 const data = snap.val();
                 if(!data) return;
 
-                // Sync Mode info for Guest
                 if(STATE.mpRole === 'guest' && data.mode) {
                     STATE.mpModeSelected = data.mode;
                 }
 
-                // 1. Start Game
+                // 1. START GAME
                 if(data.status === 'starting' || data.status === 'playing') {
                     document.getElementById('lobby-screen').classList.add('hidden');
                     
-                    // Host picks location if none exists or if it's new round
+                    // Host Logic: Pick location only if missing
                     if (STATE.mpRole === 'host' && (!data.location || data.status === 'starting')) {
-                        // Avoid double picking
                         if (data.status === 'starting') {
+                            // Update status to 'playing' first to prevent loops
                             update(ref(db, 'games/' + gameId), { status: 'playing' });
+                            
                             pickRandomLocation().then(loc => {
                                 update(ref(db, 'games/' + gameId), { location: loc });
                             });
@@ -577,18 +629,20 @@
                     }
                 }
 
-                // 2. Load Location Sync
+                // 2. LOCATION SYNC
                 if(data.location && (!STATE.currentLoc || STATE.currentLoc.id !== data.location.id)) {
                     STATE.currentLoc = data.location;
                     STATE.round = data.round;
-                    updateHUD(); // Show HUD (Scores, etc)
+                    STATE.resultShown = false; // Reset result flag for new round
+                    
+                    updateHUD();
                     loadLocation(data.location);
                     resetMapUI();
                     
                     if(STATE.mpModeSelected === 'challenge') startTimer(120);
                 }
 
-                // 3. Opponent Score Update
+                // 3. SCORE UPDATE
                 if(data.scores) {
                     const oppRole = STATE.mpRole === 'host' ? 'guest' : 'host';
                     STATE.oppScore = data.scores[oppRole];
@@ -597,21 +651,26 @@
                     STATE.score = data.scores[STATE.mpRole];
                 }
 
-                // 4. Round Finished Logic (Both guessed)
-                if(data.guesses && data.guesses.host && data.guesses.guest && !STATE.isLocked) {
+                // 4. CHECK IF BOTH GUESSED (Fix for Stuck State)
+                if(data.guesses && data.guesses.host && data.guesses.guest && !STATE.resultShown) {
+                     STATE.resultShown = true; // Ensure it runs only once per round
+                     clearInterval(STATE.timer);
                      showMpResult(data.guesses, data.location);
+                } else if (data.guesses && !STATE.resultShown) {
+                    // Update button if I have guessed but opponent hasn't
+                    if(STATE.isLocked) {
+                        document.getElementById('confirm-btn').innerText = "Waiting for Opponent...";
+                    }
                 }
 
-                // 5. Next Round trigger
+                // 5. NEXT ROUND SYNC
                 if(data.status === 'next_round' && STATE.isLocked) {
                     STATE.isLocked = false;
-                    // Host will pick new location which triggers #2
                 }
             });
         }
 
         // ================= GAME LOGIC =================
-        
         async function pickRandomLocation() {
             const city = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
             const range = 0.04;
@@ -630,7 +689,7 @@
                         lng: data.data[0].geometry.coordinates[0],
                         city: city 
                     };
-                } else return pickRandomLocation(); // Retry
+                } else return pickRandomLocation(); 
             } catch(e) { return pickRandomLocation(); }
         }
 
@@ -663,7 +722,6 @@
             btn.disabled = true;
         }
 
-        // TIMER
         function startTimer(seconds) {
             clearInterval(STATE.timer);
             STATE.timeLeft = seconds;
@@ -674,8 +732,6 @@
                 updateTimerDisplay();
                 if(STATE.timeLeft <= 0) {
                     clearInterval(STATE.timer);
-                    // Time up: Submit random guess if not guessed? Or just 0 pts.
-                    // For simplicity: Force submit current guess or 0,0
                     if(!STATE.isLocked) window.submitGuess(true); 
                 }
             }, 1000);
@@ -700,18 +756,26 @@
             const uLat = guessMarker ? guessMarker.getLatLng() : L.latLng(0,0);
             const aLat = L.latLng(STATE.currentLoc.lat, STATE.currentLoc.lng);
             const dist = map.distance(uLat, aLat);
-            const pts = Math.round(5000 * Math.exp(-dist / 120000)); // Standard scoring
+            const pts = Math.round(5000 * Math.exp(-dist / 120000)); 
 
-            // Handle Multiplayer Submit
+            // Haptic
+            if(window.Telegram?.WebApp?.HapticFeedback) {
+                 window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+            }
+
+            // MP Submit
             if(STATE.mode === 'multi') {
-                document.getElementById('confirm-btn').innerText = "WAITING FOR OPPONENT...";
+                document.getElementById('confirm-btn').innerText = "Waiting for Opponent...";
+                
+                // Update DB with my guess
                 set(ref(db, `games/${STATE.gameId}/guesses/${STATE.mpRole}`), {
                     lat: uLat.lat, lng: uLat.lng, pts: pts
                 });
-                return; // Wait for DB listener to show result
+                // WE DO NOT SHOW RESULT YET. Listener handles it.
+                return;
             }
 
-            // Single Player Show Result
+            // Single Player Submit
             STATE.score += pts;
             showSingleResult(uLat, aLat, dist, pts);
         };
@@ -719,18 +783,16 @@
         function showSingleResult(uLat, aLat, dist, pts) {
             setupResultMap(uLat, aLat);
             
-            // Text
             document.getElementById('res-dist').innerText = formatDist(dist);
             document.getElementById('res-pts').innerText = "+" + pts + " pts";
             document.getElementById('res-loc-name').innerHTML = STATE.currentLoc.city.name + " " + STATE.currentLoc.city.flag;
             
-            // Button Logic
             const nextBtn = document.getElementById('next-btn');
             if (STATE.mode === 'challenge' && STATE.round >= STATE.maxRounds) {
-                nextBtn.innerText = "FINISH GAME";
+                nextBtn.innerText = "Finish Game";
                 nextBtn.onclick = showSummary;
             } else {
-                nextBtn.innerText = "PLAY NEXT";
+                nextBtn.innerText = "Play Next";
                 nextBtn.onclick = window.nextRound;
             }
 
@@ -738,55 +800,54 @@
         }
 
         function showMpResult(guesses, locData) {
-            // Calculate who is who
             const myGuess = guesses[STATE.mpRole];
             const oppRole = STATE.mpRole === 'host' ? 'guest' : 'host';
             const oppGuess = guesses[oppRole];
             const actual = L.latLng(locData.lat, locData.lng);
             
-            // Update Scores in STATE (already synced via DB, but double check visuals)
-            // Visuals
             setupResultMap(L.latLng(myGuess.lat, myGuess.lng), actual);
             
-            // Add Opponent Marker
+            // Opponent Marker
             const oppLatLng = L.latLng(oppGuess.lat, oppGuess.lng);
-            oppMarker = L.circleMarker(oppLatLng, { radius: 6, color: 'var(--accent-red)', fillColor:'var(--accent-red)', fillOpacity:1 }).addTo(map);
-            oppLine = L.polyline([oppLatLng, actual], { color: 'var(--accent-red)', weight: 2, dashArray:'5,5' }).addTo(map);
+            oppMarker = L.circleMarker(oppLatLng, { radius: 6, color: '#ff6b6b', fillColor:'#ff6b6b', fillOpacity:1 }).addTo(map);
+            oppLine = L.polyline([oppLatLng, actual], { color: '#ff6b6b', weight: 2, dashArray:'5,5' }).addTo(map);
 
-            // Sheet Info
             const myDist = map.distance(L.latLng(myGuess.lat, myGuess.lng), actual);
             const oppDist = map.distance(oppLatLng, actual);
             
             document.getElementById('res-dist').innerText = formatDist(myDist);
-            document.getElementById('res-pts').innerText = (myDist < oppDist ? "WON ROUND" : "LOST ROUND");
-            document.getElementById('res-pts').style.color = (myDist < oppDist ? "var(--accent-green)" : "var(--accent-red)");
+            const won = myDist < oppDist;
+            document.getElementById('res-pts').innerText = won ? "WINNER!" : "LOST";
+            document.getElementById('res-pts').style.color = won ? "#38ef7d" : "#ff6b6b";
             document.getElementById('res-loc-name').innerHTML = STATE.currentLoc.city.name + " " + STATE.currentLoc.city.flag;
             
-            // MP Info
             const mpInfo = document.getElementById('res-multi-info');
             mpInfo.style.display = 'block';
             document.getElementById('res-opp-dist').innerText = formatDist(oppDist);
 
-            // Handle Rounds
             const nextBtn = document.getElementById('next-btn');
-            if (STATE.mpModeSelected === 'challenge' && STATE.round >= 5) {
-                nextBtn.innerText = "FINISH GAME";
-                nextBtn.onclick = showSummary; // End game locally
+            if (STATE.mpModeSelected === 'challenge' && STATE.round >= STATE.maxRounds) {
+                nextBtn.innerText = "Finish Game";
+                nextBtn.onclick = showSummary;
             } else {
-                nextBtn.innerText = (STATE.mpRole === 'host') ? "NEXT ROUND" : "WAITING HOST...";
+                nextBtn.innerText = (STATE.mpRole === 'host') ? "Next Round" : "Waiting for Host...";
                 nextBtn.onclick = (STATE.mpRole === 'host') ? window.nextRound : null;
-                // Update DB scores permanently
+
+                // Sync scores to DB (Host responsibility)
                 if(STATE.mpRole === 'host') {
-                     update(ref(db, `games/${STATE.gameId}/scores`), {
-                        host: (guesses.host.pts || 0) + (STATE.round === 1 ? 0 : 0), // Note: simplistic accumulation logic, real app would sum array
-                        guest: (guesses.guest.pts || 0)
+                     // Get current scores from DB first to be safe, then add
+                     get(ref(db, `games/${STATE.gameId}/scores`)).then(snap => {
+                        const cur = snap.val() || { host: 0, guest: 0 };
+                        update(ref(db, `games/${STATE.gameId}/scores`), {
+                            host: cur.host + (guesses.host.pts || 0),
+                            guest: cur.guest + (guesses.guest.pts || 0)
+                        });
                      });
-                     // Actually we need to read prev score. 
-                     // Simplified: scores are updated in client, we trust client state for now or read from DB listener.
                 }
             }
-
+            
             document.getElementById('result-sheet').classList.add('show');
+            if(won) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
         }
 
         function setupResultMap(uLat, aLat) {
@@ -795,7 +856,7 @@
             setTimeout(() => map.invalidateSize(), 200);
 
             resultMarker = L.circleMarker(aLat, { radius: 8, color: '#fff', fillColor: '#00ff00', fillOpacity: 1 }).addTo(map);
-            resultLine = L.polyline([uLat, aLat], { color: '#3390ec', weight: 4 }).addTo(map);
+            resultLine = L.polyline([uLat, aLat], { color: '#00C6FF', weight: 4 }).addTo(map);
             
             const group = new L.featureGroup([L.marker(uLat), resultMarker]);
             map.fitBounds(group.getBounds(), { padding: [50, 50], maxZoom: 16 });
@@ -806,21 +867,19 @@
                 if(STATE.mode === 'challenge') STATE.round++;
                 startGameLoop();
             } else if (STATE.mode === 'multi' && STATE.mpRole === 'host') {
-                // Reset guesses, increment round, set new status
                 const nextR = STATE.round + 1;
                 update(ref(db, `games/${STATE.gameId}`), {
                     status: 'next_round',
                     round: nextR,
-                    guesses: null
+                    guesses: null // Clear guesses for next round
                 });
-                // Triggers listener to pick new location
             }
         };
 
         function showSummary() {
             document.getElementById('summary-modal').style.display = 'flex';
             document.getElementById('final-score').innerText = STATE.score;
-            if(STATE.score > 15000) confetti();
+            confetti({ particleCount: 200, spread: 100 });
         }
 
         window.toggleMap = () => {
@@ -841,15 +900,13 @@
         }
 
         window.shareResult = () => {
-            const text = `I scored ${STATE.score} pts in GeoGuessr Ultimate! Can you beat me?`;
-            const url = `https://t.me/share/url?url=${encodeURIComponent("t.me/your_bot_link")}&text=${encodeURIComponent(text)}`;
-            if(window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.openTelegramLink(url);
+            const text = `I scored ${STATE.score} pts in GeoDuel Ultimate! Can you beat me?`;
+            const url = `https://t.me/share/url?url=${encodeURIComponent("t.me/geoduel_bot/app")}&text=${encodeURIComponent(text)}`;
+            if(window.Telegram?.WebApp) window.Telegram.WebApp.openTelegramLink(url);
             else window.open(url, '_blank');
         };
 
-        // Start
         init();
-
     </script>
 </body>
 </html>
