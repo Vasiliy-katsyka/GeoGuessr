@@ -589,7 +589,10 @@
             mly = new Viewer({
                 accessToken: MLY_TOKEN,
                 container: 'mly',
-                component: { cover: false }
+                component: { 
+                    cover: false,
+                    sequence: false  // <--- Disables the arrows on the floor (optional)
+                }
             });
 
             // Tap Listener
