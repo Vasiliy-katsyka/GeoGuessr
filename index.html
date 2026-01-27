@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GeoDuel Ultimate</title>
+    <title>GeoGuessr</title>
     
     <!-- Telegram Web App -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -16,7 +16,7 @@
     <style>
         /* ==================== THEME & RESET ==================== */
         :root {
-            --bg-color: #0f0f12; /* Darker, cleaner bg */
+            --bg-color: #0f0f12;
             --text-color: #ffffff;
             --primary-grad: linear-gradient(135deg, #00C6FF 0%, #0072FF 100%);
             --purple-grad: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
@@ -46,9 +46,9 @@
         /* ==================== LAYERS ==================== */
         #mly { width: 100%; height: 100%; position: absolute; top:0; left:0; z-index: 1; }
         
-        /* Mapillary Control Override: Move controls down to avoid Telegram Header */
+        /* Mapillary Control Override: Move controls down */
         .mapillary-sequence-controls, .mapillary-direction-arrows {
-            top: 60px !important; /* Move play/nav buttons down */
+            top: 90px !important; /* Moved down to 90px */
         }
         
         /* ==================== MENUS & UI ==================== */
@@ -62,7 +62,7 @@
         }
         
         .menu-title { 
-            font-size: 3rem; font-weight: 800; margin-bottom: 10px; 
+            font-size: 3.5rem; font-weight: 800; margin-bottom: 10px; 
             background: var(--primary-grad); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
             text-align: center; letter-spacing: -1px;
         }
@@ -78,11 +78,16 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
         }
         .btn-main:active { transform: scale(0.97); }
-        .btn-main::before {
-            content: ''; position: absolute; top:0; left:0; width:100%; height:100%;
-            background: linear-gradient(rgba(255,255,255,0.2), transparent);
-            opacity: 0.5;
+        .btn-main:disabled { opacity: 0.7; cursor: not-allowed; }
+
+        /* Button Loader Styles */
+        .btn-spinner {
+            width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3);
+            border-top: 3px solid white; border-radius: 50%;
+            animation: spin 0.8s linear infinite; display: none;
         }
+        .btn-main.loading .btn-content { display: none; }
+        .btn-main.loading .btn-spinner { display: block; }
 
         .btn-blue { background: var(--primary-grad); }
         .btn-purple { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
@@ -100,8 +105,8 @@
         /* ==================== GAME HUD ==================== */
         #top-hud {
             position: absolute; 
-            /* Push down for Telegram Header */
-            top: 50px; left: 0; width: 100%;
+            top: 40px; /* Requested 40px */
+            left: 0; width: 100%;
             padding: 0 20px; box-sizing: border-box;
             display: flex; justify-content: space-between; align-items: flex-start;
             z-index: 100; pointer-events: none;
@@ -186,6 +191,7 @@
             background: var(--primary-grad); color: white; padding: 18px;
             border: none; border-radius: 16px; font-size: 16px; font-weight: bold; flex: 1;
             box-shadow: 0 4px 15px rgba(0,0,0,0.2); cursor: pointer;
+            display: flex; justify-content: center; align-items: center;
         }
         .btn-secondary {
             background: rgba(255,255,255,0.1); color: white; padding: 16px;
@@ -208,7 +214,7 @@
 
         .hidden { display: none !important; }
 
-        /* Loading Spinner */
+        /* Loading Spinner Screen */
         #loading {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: #0f0f12; z-index: 4000;
@@ -234,25 +240,28 @@
 </head>
 <body>
 
-    <!-- 1. LOADING SCREEN -->
+    <!-- 1. LOADING SCREEN (Global) -->
     <div id="loading">
         <div class="spinner"></div>
-        <h3 id="loading-text" style="color: #666; font-weight: 400;">Preparing Map...</h3>
+        <h3 id="loading-text" style="color: #666; font-weight: 400;">Loading World...</h3>
     </div>
 
     <!-- 2. MAIN MENU -->
     <div id="main-menu" class="full-screen-menu hidden">
-        <div class="menu-title">GeoDuel<br>Ultimate</div>
+        <div class="menu-title">GeoGuessr</div>
         <div class="menu-subtitle">Explore the world & challenge friends</div>
 
         <button class="btn-main btn-blue" onclick="window.startEndless()">
-            <span>∞</span> Endless Mode
+            <span class="btn-content"><span>∞</span> Endless Mode</span>
+            <div class="btn-spinner"></div>
         </button>
         <button class="btn-main btn-purple" onclick="window.startChallenge()">
-            <span>⏱️</span> Challenge Mode
+            <span class="btn-content"><span>⏱️</span> Challenge Mode</span>
+            <div class="btn-spinner"></div>
         </button>
         <button class="btn-main btn-green" onclick="window.openFriendMenu()">
-            <span>👥</span> Friend Mode
+            <span class="btn-content"><span>👥</span> Friend Mode</span>
+            <div class="btn-spinner"></div>
         </button>
     </div>
 
@@ -267,7 +276,10 @@
                 <button id="mp-mode-endless" class="toggle-btn selected" onclick="window.selectMpMode('endless')">Endless</button>
                 <button id="mp-mode-challenge" class="toggle-btn" onclick="window.selectMpMode('challenge')">Challenge</button>
             </div>
-            <button class="btn-main btn-green" style="width:100%; max-width:none; margin:0;" onclick="window.createRoom()">Create & Play</button>
+            <button id="btn-create" class="btn-main btn-green" style="width:100%; max-width:none; margin:0;" onclick="window.createRoom()">
+                <span class="btn-content">Create & Play</span>
+                <div class="btn-spinner"></div>
+            </button>
         </div>
 
         <div style="color:#555; font-weight:bold; margin-bottom: 25px;">— OR —</div>
@@ -275,7 +287,10 @@
         <!-- Join -->
         <div style="width:100%; max-width:350px; text-align:center;">
             <input type="text" id="join-code" class="input-code" placeholder="CODE" maxlength="5">
-            <button class="btn-main btn-blue" style="width:100%; max-width:none; margin:0;" onclick="window.joinRoom()">Join Room</button>
+            <button id="btn-join" class="btn-main btn-blue" style="width:100%; max-width:none; margin:0;" onclick="window.joinRoom()">
+                <span class="btn-content">Join Room</span>
+                <div class="btn-spinner"></div>
+            </button>
         </div>
 
         <button class="btn-main btn-dark" style="width:auto; padding: 12px 30px; margin-top: 40px;" onclick="window.showMainMenu()">Back</button>
@@ -327,7 +342,6 @@
             </div>
         </div>
 
-        <!-- Multiplayer / Challenge specific result info -->
         <div id="res-multi-info" style="background:rgba(255,255,255,0.08); padding:15px; border-radius:12px; display:none;">
             <div style="display:flex; justify-content:space-between; align-items: center;">
                 <span style="color:#aaa; font-weight:600;">Opponent:</span>
@@ -337,7 +351,10 @@
 
         <div class="btn-group">
             <button class="btn-secondary" onclick="window.shareResult()">📤</button>
-            <button class="btn-primary" id="next-btn" onclick="window.nextRound()">Play Next</button>
+            <button class="btn-primary" id="next-btn" onclick="window.nextRound()">
+                <span class="btn-content">Play Next</span>
+                <div class="btn-spinner"></div>
+            </button>
         </div>
     </div>
 
@@ -387,7 +404,7 @@
             currentLoc: null,
             isLocked: false,
             mpModeSelected: 'endless',
-            resultShown: false // Prevent double firing
+            resultShown: false
         };
 
         const MLY_TOKEN = 'MLY|26213154491618951|523c0418de2d6a8118aefdab3284d6c2'; 
@@ -462,7 +479,6 @@
 
         // ================= INIT =================
         function init() {
-            // Setup Map
             map = L.map('map', { zoomControl: false }).setView([20, 0], 2);
             L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '©CARTO' }).addTo(map);
 
@@ -484,7 +500,6 @@
                 btn.innerText = "CONFIRM GUESS";
                 btn.disabled = false;
                 
-                // Haptic
                 if(window.Telegram?.WebApp?.HapticFeedback) {
                      window.Telegram.WebApp.HapticFeedback.selectionChanged();
                 }
@@ -492,6 +507,19 @@
 
             document.getElementById('loading').classList.add('hidden');
             document.getElementById('main-menu').classList.remove('hidden');
+        }
+
+        // Helper: Toggle Button Loading
+        function setBtnLoading(btnId, isLoading) {
+            const btn = document.getElementById(btnId);
+            if(!btn) return;
+            if(isLoading) {
+                btn.classList.add('loading');
+                btn.disabled = true;
+            } else {
+                btn.classList.remove('loading');
+                btn.disabled = false;
+            }
         }
 
         // ================= MENU FUNCTIONS =================
@@ -548,6 +576,7 @@
             resetMapUI();
             
             if (STATE.mode !== 'multi') {
+                document.getElementById('loading').classList.remove('hidden'); // Show loader
                 pickRandomLocation().then(loc => {
                     STATE.currentLoc = loc;
                     loadLocation(loc);
@@ -560,6 +589,7 @@
 
         // ================= MULTIPLAYER =================
         window.createRoom = () => {
+            setBtnLoading('btn-create', true);
             const code = Math.floor(10000 + Math.random() * 90000).toString();
             STATE.gameId = code;
             STATE.mpRole = 'host';
@@ -571,20 +601,23 @@
                 round: 1,
                 scores: { host: 0, guest: 0 },
                 location: null
+            }).then(() => {
+                setBtnLoading('btn-create', false);
+                document.getElementById('friend-menu').classList.add('hidden');
+                document.getElementById('lobby-screen').classList.remove('hidden');
+                document.getElementById('lobby-code-display').innerText = code;
+                listenToGame(code);
             });
-
-            document.getElementById('friend-menu').classList.add('hidden');
-            document.getElementById('lobby-screen').classList.remove('hidden');
-            document.getElementById('lobby-code-display').innerText = code;
-            
-            listenToGame(code);
         };
 
         window.joinRoom = () => {
             const code = document.getElementById('join-code').value;
             if(code.length !== 5) return alert("Invalid Code");
 
+            setBtnLoading('btn-join', true);
+
             get(ref(db, 'games/' + code)).then((snap) => {
+                setBtnLoading('btn-join', false);
                 if(snap.exists()) {
                     STATE.gameId = code;
                     STATE.mpRole = 'guest';
@@ -616,12 +649,10 @@
                 if(data.status === 'starting' || data.status === 'playing') {
                     document.getElementById('lobby-screen').classList.add('hidden');
                     
-                    // Host Logic: Pick location only if missing
                     if (STATE.mpRole === 'host' && (!data.location || data.status === 'starting')) {
                         if (data.status === 'starting') {
-                            // Update status to 'playing' first to prevent loops
                             update(ref(db, 'games/' + gameId), { status: 'playing' });
-                            
+                            document.getElementById('loading').classList.remove('hidden');
                             pickRandomLocation().then(loc => {
                                 update(ref(db, 'games/' + gameId), { location: loc });
                             });
@@ -633,7 +664,7 @@
                 if(data.location && (!STATE.currentLoc || STATE.currentLoc.id !== data.location.id)) {
                     STATE.currentLoc = data.location;
                     STATE.round = data.round;
-                    STATE.resultShown = false; // Reset result flag for new round
+                    STATE.resultShown = false; 
                     
                     updateHUD();
                     loadLocation(data.location);
@@ -642,7 +673,7 @@
                     if(STATE.mpModeSelected === 'challenge') startTimer(120);
                 }
 
-                // 3. SCORE UPDATE
+                // 3. SCORE
                 if(data.scores) {
                     const oppRole = STATE.mpRole === 'host' ? 'guest' : 'host';
                     STATE.oppScore = data.scores[oppRole];
@@ -651,21 +682,15 @@
                     STATE.score = data.scores[STATE.mpRole];
                 }
 
-                // 4. CHECK IF BOTH GUESSED (Fix for Stuck State)
+                // 4. SHOW RESULT
                 if(data.guesses && data.guesses.host && data.guesses.guest && !STATE.resultShown) {
-                     STATE.resultShown = true; // Ensure it runs only once per round
+                     STATE.resultShown = true; 
                      clearInterval(STATE.timer);
                      showMpResult(data.guesses, data.location);
                 } else if (data.guesses && !STATE.resultShown) {
-                    // Update button if I have guessed but opponent hasn't
                     if(STATE.isLocked) {
                         document.getElementById('confirm-btn').innerText = "Waiting for Opponent...";
                     }
-                }
-
-                // 5. NEXT ROUND SYNC
-                if(data.status === 'next_round' && STATE.isLocked) {
-                    STATE.isLocked = false;
                 }
             });
         }
@@ -694,14 +719,19 @@
         }
 
         function loadLocation(loc) {
-            document.getElementById('loading').classList.remove('hidden');
+            // Loader is already shown before this call
             mly.moveTo(loc.id)
                 .then(() => document.getElementById('loading').classList.add('hidden'))
-                .catch(e => console.log(e));
+                .catch(e => {
+                     console.log(e);
+                     // If fail, try new location
+                     pickRandomLocation().then(l => loadLocation(l));
+                });
         }
 
         function resetMapUI() {
             STATE.isLocked = false;
+            setBtnLoading('next-btn', false); // Reset next button loading state
             document.getElementById('result-sheet').classList.remove('show');
             document.getElementById('map-container').classList.remove('map-result-mode', 'open');
             document.getElementById('mobile-map-toggle').style.display = 'flex';
@@ -758,24 +788,18 @@
             const dist = map.distance(uLat, aLat);
             const pts = Math.round(5000 * Math.exp(-dist / 120000)); 
 
-            // Haptic
             if(window.Telegram?.WebApp?.HapticFeedback) {
                  window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
             }
 
-            // MP Submit
             if(STATE.mode === 'multi') {
                 document.getElementById('confirm-btn').innerText = "Waiting for Opponent...";
-                
-                // Update DB with my guess
                 set(ref(db, `games/${STATE.gameId}/guesses/${STATE.mpRole}`), {
                     lat: uLat.lat, lng: uLat.lng, pts: pts
                 });
-                // WE DO NOT SHOW RESULT YET. Listener handles it.
                 return;
             }
 
-            // Single Player Submit
             STATE.score += pts;
             showSingleResult(uLat, aLat, dist, pts);
         };
@@ -788,11 +812,13 @@
             document.getElementById('res-loc-name').innerHTML = STATE.currentLoc.city.name + " " + STATE.currentLoc.city.flag;
             
             const nextBtn = document.getElementById('next-btn');
+            const nextBtnText = nextBtn.querySelector('.btn-content');
+            
             if (STATE.mode === 'challenge' && STATE.round >= STATE.maxRounds) {
-                nextBtn.innerText = "Finish Game";
+                nextBtnText.innerText = "Finish Game";
                 nextBtn.onclick = showSummary;
             } else {
-                nextBtn.innerText = "Play Next";
+                nextBtnText.innerText = "Play Next";
                 nextBtn.onclick = window.nextRound;
             }
 
@@ -807,7 +833,6 @@
             
             setupResultMap(L.latLng(myGuess.lat, myGuess.lng), actual);
             
-            // Opponent Marker
             const oppLatLng = L.latLng(oppGuess.lat, oppGuess.lng);
             oppMarker = L.circleMarker(oppLatLng, { radius: 6, color: '#ff6b6b', fillColor:'#ff6b6b', fillOpacity:1 }).addTo(map);
             oppLine = L.polyline([oppLatLng, actual], { color: '#ff6b6b', weight: 2, dashArray:'5,5' }).addTo(map);
@@ -826,16 +851,16 @@
             document.getElementById('res-opp-dist').innerText = formatDist(oppDist);
 
             const nextBtn = document.getElementById('next-btn');
+            const nextBtnText = nextBtn.querySelector('.btn-content');
+
             if (STATE.mpModeSelected === 'challenge' && STATE.round >= STATE.maxRounds) {
-                nextBtn.innerText = "Finish Game";
+                nextBtnText.innerText = "Finish Game";
                 nextBtn.onclick = showSummary;
             } else {
-                nextBtn.innerText = (STATE.mpRole === 'host') ? "Next Round" : "Waiting for Host...";
+                nextBtnText.innerText = (STATE.mpRole === 'host') ? "Next Round" : "Waiting for Host...";
                 nextBtn.onclick = (STATE.mpRole === 'host') ? window.nextRound : null;
-
-                // Sync scores to DB (Host responsibility)
+                // Host updates scores in background
                 if(STATE.mpRole === 'host') {
-                     // Get current scores from DB first to be safe, then add
                      get(ref(db, `games/${STATE.gameId}/scores`)).then(snap => {
                         const cur = snap.val() || { host: 0, guest: 0 };
                         update(ref(db, `games/${STATE.gameId}/scores`), {
@@ -863,15 +888,31 @@
         }
 
         window.nextRound = () => {
+            setBtnLoading('next-btn', true);
+
             if(STATE.mode === 'endless' || STATE.mode === 'challenge') {
                 if(STATE.mode === 'challenge') STATE.round++;
                 startGameLoop();
             } else if (STATE.mode === 'multi' && STATE.mpRole === 'host') {
                 const nextR = STATE.round + 1;
+                // Host resets guesses and moves to next round
+                // We also clear previous location to prevent glitch
                 update(ref(db, `games/${STATE.gameId}`), {
                     status: 'next_round',
                     round: nextR,
-                    guesses: null // Clear guesses for next round
+                    guesses: null,
+                    // DO NOT CLEAR LOCATION HERE. The new location fetch happens in 'startGameLoop' equiv logic
+                    // Actually, for MP, we do it manually:
+                }).then(() => {
+                    // Host fetches next location immediately
+                    document.getElementById('loading').classList.remove('hidden');
+                    pickRandomLocation().then(loc => {
+                        update(ref(db, `games/${STATE.gameId}`), {
+                            location: loc,
+                            status: 'playing'
+                        });
+                        // Listener will handle UI update
+                    });
                 });
             }
         };
@@ -900,8 +941,8 @@
         }
 
         window.shareResult = () => {
-            const text = `I scored ${STATE.score} pts in GeoDuel Ultimate! Can you beat me?`;
-            const url = `https://t.me/share/url?url=${encodeURIComponent("t.me/geoduel_bot/app")}&text=${encodeURIComponent(text)}`;
+            const text = `I scored ${STATE.score} pts in GeoGuessr! Can you beat me?`;
+            const url = `https://t.me/share/url?url=${encodeURIComponent("t.me/geogur_bot/app")}&text=${encodeURIComponent(text)}`;
             if(window.Telegram?.WebApp) window.Telegram.WebApp.openTelegramLink(url);
             else window.open(url, '_blank');
         };
