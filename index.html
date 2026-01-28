@@ -328,6 +328,27 @@
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
         .scrollable { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+        /* Fixed History List - Scrollable & Compact */
+        #history-list { 
+            width: 100%; 
+            padding: 0 10px; 
+            box-sizing: border-box;
+            
+            /* Logic to show approx 3 items then scroll */
+            max-height: 190px; 
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            
+            /* Visual polish */
+            margin: 10px 0;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            
+            /* Hide scrollbar for clean look (optional) */
+            scrollbar-width: none; 
+        }
+        #history-list::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body>
@@ -404,7 +425,7 @@
         </div>
 
         <h3 style="align-self: flex-start; margin-left: 20px;" data-i18n="lbl_history">History</h3>
-        <div id="history-list" class="history-list" style="width:100%; padding:0 20px; box-sizing:border-box;"></div>
+        <div id="history-list" class="history-list"></div>
 
         <button class="btn-main btn-dark" style="margin-top: 30px;" onclick="window.closeProfile()" data-i18n="btn_back">Back</button>
         <!-- CLEAR DATA BUTTON -->
