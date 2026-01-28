@@ -8,7 +8,6 @@
     <!-- Telegram Web App -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
-        // Init & Fullscreen
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.ready();
             try {
@@ -19,10 +18,12 @@
         }
     </script>
 
-    <!-- Libs -->
+    <!-- External Libs -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://unpkg.com/mapillary-js@4.1.0/dist/mapillary.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Lottie Player -->
+    <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
 
     <style>
         /* ==================== THEME & VARS ==================== */
@@ -30,13 +31,10 @@
             --bg-color: #0f0f12;
             --text-color: #ffffff;
             --primary-grad: linear-gradient(135deg, #00C6FF 0%, #0072FF 100%);
-            --red-grad: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
-            --glass-bg: rgba(30, 30, 40, 0.85); /* Made slightly darker for visibility */
-            --glass-border: rgba(255, 255, 255, 0.15);
-            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-            --blur: 25px;
-            
-            /* SAFE AREA FOR TOP ELEMENTS */
+            --glass-bg: rgba(25, 25, 35, 0.65);
+            --glass-border: rgba(255, 255, 255, 0.12);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+            --blur: 40px;
             --safe-top: 80px; 
         }
 
@@ -47,62 +45,76 @@
             overflow: hidden; -webkit-tap-highlight-color: transparent;
         }
 
-        /* UTILS */
+        /* ==================== ANIMATED BACKGROUND ==================== */
+        .bg-blob {
+            position: absolute; border-radius: 50%;
+            filter: blur(80px); opacity: 0.4; z-index: 0;
+            animation: floatBlob 10s infinite alternate ease-in-out;
+        }
+        .blob-1 { top: -10%; left: -10%; width: 300px; height: 300px; background: #00C6FF; }
+        .blob-2 { bottom: -10%; right: -10%; width: 350px; height: 350px; background: #764ba2; animation-delay: -5s; }
+        .blob-3 { top: 40%; left: 40%; width: 200px; height: 200px; background: #38ef7d; animation-duration: 15s; opacity: 0.2; }
+
+        @keyframes floatBlob {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(30px, 50px) scale(1.1); }
+        }
+
+        /* ==================== UTILS & GLASS ==================== */
         .glass-panel {
             background: var(--glass-bg);
             backdrop-filter: blur(var(--blur)); -webkit-backdrop-filter: blur(var(--blur));
-            border: 1px solid var(--glass-border); border-radius: 20px;
+            border: 1px solid var(--glass-border); border-radius: 24px;
             box-shadow: var(--glass-shadow);
         }
         .hidden { display: none !important; }
-        .scrollable { overflow-y: auto; -webkit-overflow-scrolling: touch; }
         
-        /* ==================== GLOBAL UI ELEMENTS ==================== */
-        /* LANGUAGE BUTTON */
+        /* Language Toggle - Hidden when .game-active is on body */
         #settings-btn {
-            position: absolute; 
-            top: var(--safe-top); /* RESTORED 80px */
-            right: 20px; 
-            z-index: 6000;
-            width: 42px; height: 42px; 
-            background: var(--glass-bg);
-            border-radius: 50%; 
-            display: flex; justify-content: center; align-items: center;
-            border: 1px solid rgba(255,255,255,0.2); 
-            cursor: pointer; font-size: 22px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            position: absolute; top: var(--safe-top); right: 20px; z-index: 6000;
+            width: 42px; height: 42px; background: var(--glass-bg);
+            border-radius: 50%; display: flex; justify-content: center; align-items: center;
+            border: 1px solid rgba(255,255,255,0.2); cursor: pointer; font-size: 22px;
+            backdrop-filter: blur(10px); box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            transition: opacity 0.3s;
         }
-
-        /* ==================== LAYERS ==================== */
-        #mly { width: 100%; height: 100%; position: absolute; top:0; left:0; z-index: 1; }
-        .mapillary-sequence-controls, .mapillary-direction-arrows { display: none; }
+        body.game-active #settings-btn { opacity: 0; pointer-events: none; }
 
         /* ==================== MENUS ==================== */
         .full-screen-menu {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: radial-gradient(circle at center, #1a1a2e 0%, #050505 100%);
             z-index: 5000;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             padding: 20px; box-sizing: border-box;
             transition: opacity 0.3s ease;
         }
+        /* Dark overlay for menus to make text pop over blobs */
+        .menu-overlay {
+            position: absolute; top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.4); z-index: -1; backdrop-filter: blur(10px);
+        }
 
         .menu-title { 
-            font-size: 3.5rem; font-weight: 800; margin-bottom: 10px; 
+            font-size: 3.5rem; font-weight: 800; margin-bottom: 5px; 
             background: var(--primary-grad); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-            text-align: center; letter-spacing: -1px; filter: drop-shadow(0 0 20px rgba(0, 198, 255, 0.3));
+            text-align: center; letter-spacing: -1px; filter: drop-shadow(0 0 30px rgba(0, 198, 255, 0.4));
         }
-        .menu-subtitle { font-size: 1.1rem; color: #a0a0a0; margin-bottom: 40px; text-align: center; }
+        .menu-subtitle { font-size: 1.1rem; color: #ccc; margin-bottom: 40px; text-align: center; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
 
         .btn-main {
             width: 100%; max-width: 320px; padding: 18px; margin: 8px 0;
             border: none; border-radius: 18px; font-size: 1.1rem; font-weight: 600;
             cursor: pointer; color: white; text-transform: uppercase; letter-spacing: 1px;
             position: relative; display: flex; align-items: center; justify-content: center; gap: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3); background-size: 200% auto;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3); background-size: 200% auto;
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(5px);
         }
         .btn-main:active { transform: scale(0.97); }
+        .btn-blue { background: var(--primary-grad); }
+        .btn-purple { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .btn-green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+        .btn-dark { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); }
         .btn-spinner {
             width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3);
             border-top: 3px solid white; border-radius: 50%;
@@ -111,96 +123,30 @@
         .btn-main.loading .btn-content { display: none; }
         .btn-main.loading .btn-spinner { display: block; }
 
-        .btn-blue { background: var(--primary-grad); }
-        .btn-purple { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .btn-green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
-        .btn-red { background: var(--red-grad); }
-        .btn-dark { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); }
-
-        .input-code {
-            padding: 16px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.2);
-            background: rgba(0,0,0,0.3); backdrop-filter: blur(10px);
-            color: white; font-size: 24px; width: 80%; text-align: center; margin: 20px 0;
-            letter-spacing: 5px; font-weight: bold; text-transform: uppercase; outline: none;
-        }
-
-        /* ==================== LOBBY ==================== */
-        #player-list {
-            width: 100%; max-width: 350px; max-height: 200px;
-            margin: 20px 0; overflow-y: auto;
-        }
-        .player-item {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 12px; background: rgba(255,255,255,0.05);
-            margin-bottom: 8px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);
-        }
-        .player-info { display: flex; align-items: center; gap: 10px; }
-        .player-avatar { 
-            width: 32px; height: 32px; border-radius: 50%; background: #555; 
-            display:flex; justify-content:center; align-items:center; font-size:14px;
-        }
-        .kick-btn {
-            background: none; border: none; color: #ff4b2b; font-weight: bold; font-size: 18px; cursor: pointer;
-        }
-
-        /* ==================== PROFILE ==================== */
-        #profile-screen {
-            background: rgba(10, 10, 15, 0.95); z-index: 6000;
-        }
-        .profile-header {
-            display: flex; flex-direction: column; align-items: center; margin-bottom: 30px;
-        }
-        .big-avatar {
-            width: 80px; height: 80px; border-radius: 50%; background: var(--primary-grad);
-            display: flex; justify-content: center; align-items: center; font-size: 35px;
-            margin-bottom: 15px; box-shadow: 0 0 20px rgba(0,198,255,0.3);
-        }
-        .stat-grid {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 15px; width: 100%; max-width: 350px; margin-bottom: 30px;
-        }
-        .stat-card {
-            background: rgba(255,255,255,0.05); padding: 15px; border-radius: 16px; text-align: center;
-        }
-        .stat-val { font-size: 1.5rem; font-weight: 800; color: #fff; }
-        .stat-label { font-size: 0.8rem; color: #aaa; text-transform: uppercase; }
-
-        .history-list { width: 100%; max-width: 350px; }
-        .history-item {
-            background: rgba(255,255,255,0.03); padding: 12px; border-radius: 12px;
-            margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;
-        }
-        .h-score { color: #f1c40f; font-weight: bold; }
-
-        /* ==================== HUD (Restored 80px Top) ==================== */
+        /* ==================== FRIEND MENU (Centered) ==================== */
+        #friend-menu { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        
+        /* ==================== HUD ==================== */
         #top-hud {
-            position: absolute; 
-            top: var(--safe-top); /* RESTORED 80px */
-            left: 0; width: 100%;
+            position: absolute; top: var(--safe-top); left: 0; width: 100%;
             padding: 0 15px; box-sizing: border-box;
             display: flex; justify-content: space-between; align-items: flex-start;
             z-index: 100; pointer-events: none;
         }
-        
         #timer-box, #host-controls, #score-box {
-            background: var(--glass-bg); backdrop-filter: blur(20px);
+            background: var(--glass-bg); backdrop-filter: blur(25px);
             border: 1px solid var(--glass-border); border-radius: 16px;
             padding: 10px 15px; color: white; margin-bottom: 5px;
-            pointer-events: all;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            pointer-events: all; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
         }
         #timer-box { font-size: 1.4rem; font-weight: 700; }
         #timer-box.warning { border-color: #ff4b2b; color: #ff4b2b; animation: pulse 1s infinite; }
-        
-        #host-controls { display: none; flex-direction: column; gap: 5px; }
-        .mini-btn {
-            background: rgba(255,255,255,0.1); border: none; color: white; 
-            padding: 5px 10px; border-radius: 8px; font-size: 12px; cursor: pointer;
-        }
         #score-box { text-align: right; }
-        .score-row { margin-bottom: 2px; }
         .score-val { color: #f1c40f; font-size: 1.1rem; font-weight: 800; font-family: monospace;}
 
         /* ==================== MAP & RESULTS ==================== */
+        #mly { width: 100%; height: 100%; position: absolute; top:0; left:0; z-index: 1; }
+        
         #mobile-map-toggle {
             position: absolute; bottom: 30px; right: 20px;
             width: 65px; height: 65px; border-radius: 50%;
@@ -213,7 +159,7 @@
         #map-container {
             position: absolute; bottom: 110px; right: 20px;
             width: 90vw; max-width: 450px; height: 45vh;
-            background: rgba(30, 30, 35, 0.8); backdrop-filter: blur(25px);
+            background: rgba(30, 30, 35, 0.8); backdrop-filter: blur(30px);
             border: 1px solid rgba(255,255,255,0.2); border-radius: 24px;
             box-shadow: 0 20px 50px rgba(0,0,0,0.6); z-index: 200;
             transform: scale(0); opacity: 0; pointer-events: none;
@@ -221,17 +167,12 @@
             display: flex; flex-direction: column; padding: 6px; box-sizing: border-box;
         }
         #map-container.open { transform: scale(1); opacity: 1; pointer-events: all; }
-        
-        /* Map Result Mode: Fixed to be behind the sheet but visible */
         #map-container.map-result-mode {
             bottom: 0 !important; right: 0 !important; width: 100% !important; height: 100% !important;
-            border-radius: 0 !important; background: #1a1a1a; padding: 0; max-width: none;
-            z-index: 10; /* Lower z-index so sheet is on top */
+            border-radius: 0 !important; background: #1a1a1a; padding: 0; max-width: none; z-index: 10;
         }
-        
         #map { flex-grow: 1; width: 100%; border-radius: 18px; }
 
-        /* The CONFIRM button (Waiting...) */
         #confirm-btn {
             width: 100%; padding: 16px; margin-top: 6px;
             background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.4);
@@ -240,18 +181,13 @@
         }
         #confirm-btn.active { background: var(--primary-grad); color: white; cursor: pointer; }
 
-        /* RESULT SHEET (The Next/Share buttons live here) */
         #result-sheet {
             position: absolute; bottom: 0; left: 0; width: 100%;
-            background: rgba(15, 15, 22, 0.95); 
-            backdrop-filter: blur(30px);
+            background: rgba(15, 15, 22, 0.95); backdrop-filter: blur(40px);
             border-top: 1px solid rgba(255,255,255,0.2);
             border-top-left-radius: 30px; border-top-right-radius: 30px;
-            z-index: 3000; /* Must be higher than map-result-mode */
-            transform: translateY(110%); 
-            transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
-            padding: 30px 25px 50px 25px; /* Extra bottom padding for safe area */
-            box-sizing: border-box;
+            z-index: 3000; transform: translateY(110%); transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+            padding: 30px 25px 50px 25px; box-sizing: border-box;
             display: flex; flex-direction: column; gap: 20px; color: white;
             box-shadow: 0 -10px 50px rgba(0,0,0,0.8);
         }
@@ -259,8 +195,6 @@
 
         .result-row { display: flex; justify-content: space-between; align-items: flex-end; }
         .big-text { font-size: 2.2rem; font-weight: 900; line-height: 1; margin-bottom: 5px; }
-        .sub-text { color: #aaa; font-size: 1rem; }
-
         .btn-group { display: flex; gap: 15px; margin-top: 10px; }
         .btn-primary {
             background: var(--primary-grad); color: white; padding: 18px;
@@ -274,7 +208,7 @@
             font-size: 22px; width: 70px; cursor: pointer;
         }
 
-        /* Toggle Group */
+        /* ==================== OTHERS ==================== */
         .toggle-group { display: flex; gap: 10px; width: 100%; margin-bottom: 20px; }
         .toggle-btn {
             flex: 1; padding: 15px; border-radius: 14px; 
@@ -282,8 +216,27 @@
             color: #aaa; font-weight: 600; cursor: pointer; transition: 0.3s;
         }
         .toggle-btn.selected { background: var(--primary-grad); color: white; border-color: transparent; }
+        
+        /* Player List & Profile */
+        #player-list { width: 100%; max-width: 350px; max-height: 200px; margin: 20px 0; overflow-y: auto; }
+        .player-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px; background: rgba(255,255,255,0.05); margin-bottom: 8px; border-radius: 12px;
+        }
+        
+        #profile-screen { background: rgba(10, 10, 15, 0.95); z-index: 6000; }
+        .profile-header { display: flex; flex-direction: column; align-items: center; margin-bottom: 30px; }
+        .big-avatar {
+            width: 80px; height: 80px; border-radius: 50%; background: var(--primary-grad);
+            display: flex; justify-content: center; align-items: center; font-size: 35px;
+            margin-bottom: 15px; box-shadow: 0 0 30px rgba(0,198,255,0.4);
+        }
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; width: 100%; max-width: 350px; margin-bottom: 30px; }
+        .stat-card { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 16px; text-align: center; }
+        .stat-val { font-size: 1.5rem; font-weight: 800; color: #fff; }
+        .history-item { background: rgba(255,255,255,0.03); padding: 12px; border-radius: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; }
 
-        /* Loading */
+        /* LOADING SCREEN */
         #loading {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: #0f0f12; z-index: 8000;
@@ -292,21 +245,44 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
+        .scrollable { overflow-y: auto; -webkit-overflow-scrolling: touch; }
     </style>
 </head>
 <body>
+
+    <!-- Background Blobs -->
+    <div class="bg-blob blob-1"></div>
+    <div class="bg-blob blob-2"></div>
+    <div class="bg-blob blob-3"></div>
 
     <!-- SETTINGS / LANG TOGGLE -->
     <button id="settings-btn" onclick="window.toggleLanguage()">🌐</button>
 
     <!-- LOADING -->
     <div id="loading">
-        <div class="spinner" style="width: 50px; height: 50px; border: 4px solid rgba(255,255,255,0.1); border-top: 4px solid #00C6FF; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
-        <h3 id="load-text" style="color: #666; margin-top:20px;">Loading...</h3>
+        <!-- Lottie Loader -->
+        <lottie-player 
+            src="https://raw.githubusercontent.com/Vasiliy-katsyka/GeoGuessr/main/ChicklingEmoji_AgAD1S0AAkOY8Ug.json" 
+            background="transparent" 
+            speed="1" 
+            style="width: 150px; height: 150px;" 
+            loop autoplay>
+        </lottie-player>
+        <h3 id="load-text" style="color: #666; font-weight:400; letter-spacing:1px; margin-top:-10px;">Loading...</h3>
     </div>
 
     <!-- MAIN MENU -->
     <div id="main-menu" class="full-screen-menu hidden">
+        <div class="menu-overlay"></div>
+        <!-- Title Lottie -->
+        <lottie-player 
+            src="https://raw.githubusercontent.com/Vasiliy-katsyka/GeoGuessr/main/RestrictedEmoji_AgADHFgAAt1K8Eo.json" 
+            background="transparent" 
+            speed="1" 
+            style="width: 120px; height: 120px; margin-bottom: -20px;" 
+            loop autoplay>
+        </lottie-player>
+
         <div class="menu-title" data-i18n="app_title">GeoGuessr</div>
         <div class="menu-subtitle" data-i18n="app_subtitle">Explore the world & challenge friends</div>
 
@@ -329,6 +305,7 @@
 
     <!-- PROFILE SCREEN -->
     <div id="profile-screen" class="full-screen-menu hidden scrollable">
+        <div class="menu-overlay"></div>
         <div class="profile-header">
             <div class="big-avatar" id="pf-avatar">👤</div>
             <h2 id="pf-name">User</h2>
@@ -347,20 +324,19 @@
         </div>
 
         <h3 style="align-self: flex-start; margin-left: 20px;" data-i18n="lbl_history">History</h3>
-        <div id="history-list" class="history-list">
-            <!-- Items injected here -->
-        </div>
+        <div id="history-list" class="history-list" style="width:100%; padding:0 20px; box-sizing:border-box;"></div>
 
         <button class="btn-main btn-dark" style="margin-top: 30px;" onclick="window.closeProfile()" data-i18n="btn_back">Back</button>
     </div>
 
     <!-- FRIEND MENU -->
     <div id="friend-menu" class="full-screen-menu hidden">
-        <h2 style="margin-bottom: 20px;" data-i18n="friend_mode">Party Mode</h2>
+        <div class="menu-overlay"></div>
+        <h2 style="margin-bottom: 20px; font-size:2rem;" data-i18n="friend_mode">Party Mode</h2>
         
-        <div class="glass-panel" style="padding:25px; width:100%; max-width:350px; margin-bottom:20px;">
+        <div class="glass-panel" style="padding:25px; width:100%; max-width:350px; margin-bottom:20px; display:flex; flex-direction:column; align-items:center;">
             <h4 style="margin:0 0 15px 0; color:#ccc; font-size:0.8rem; text-transform:uppercase;" data-i18n="lbl_create">Create Room</h4>
-            <div class="toggle-group">
+            <div class="toggle-group" style="width:100%;">
                 <button id="mp-mode-endless" class="toggle-btn selected" onclick="window.selectMpMode('endless')" data-i18n="mode_endless">Endless</button>
                 <button id="mp-mode-challenge" class="toggle-btn" onclick="window.selectMpMode('challenge')" data-i18n="mode_challenge">Challenge</button>
             </div>
@@ -370,9 +346,9 @@
             </button>
         </div>
 
-        <div style="color:#555; font-weight:bold; margin-bottom: 20px;">— OR —</div>
+        <div style="color:#aaa; font-weight:bold; margin-bottom: 20px;">— OR —</div>
 
-        <div class="glass-panel" style="padding:25px; width:100%; max-width:350px; text-align:center;">
+        <div class="glass-panel" style="padding:25px; width:100%; max-width:350px; text-align:center; display:flex; flex-direction:column; align-items:center;">
             <h4 style="margin:0 0 15px 0; color:#ccc; font-size:0.8rem; text-transform:uppercase;" data-i18n="lbl_join">Join Room</h4>
             <input type="text" id="join-code" class="input-code" placeholder="CODE" maxlength="5">
             <button id="btn-join" class="btn-main btn-blue" style="width:100%; margin:0;" onclick="window.joinRoom()">
@@ -385,8 +361,9 @@
 
     <!-- LOBBY -->
     <div id="lobby-screen" class="full-screen-menu hidden">
+        <div class="menu-overlay"></div>
         <h1 id="lobby-code-display" style="font-size:3.5rem; background: var(--primary-grad); -webkit-background-clip:text; -webkit-text-fill-color:transparent; letter-spacing:5px; margin:0;">----</h1>
-        <p style="color:#888;" data-i18n="lbl_share_code">Share code with friends</p>
+        <p style="color:#ccc;" data-i18n="lbl_share_code">Share code with friends</p>
         
         <div id="player-list"></div>
 
@@ -404,9 +381,9 @@
     <div id="top-hud">
         <div style="display:flex; flex-direction:column;">
             <div id="timer-box">02:00</div>
-            <div id="host-controls">
+            <div id="host-controls" class="hidden">
                 <span style="font-size:10px; color:#aaa; margin-bottom:2px;">ADMIN</span>
-                <button class="mini-btn" onclick="window.hostForceRoundEnd()" data-i18n="btn_force_end">End Round</button>
+                <button class="mini-btn" style="background:rgba(255,255,255,0.1); border:none; color:white; padding:5px; border-radius:5px;" onclick="window.hostForceRoundEnd()" data-i18n="btn_force_end">End Round</button>
             </div>
         </div>
         <div id="score-box">
@@ -437,9 +414,7 @@
         </div>
         
         <!-- Multi Player Results List -->
-        <div id="res-mp-list" style="background:rgba(255,255,255,0.05); padding:10px; border-radius:12px; display:none; max-height:100px; overflow-y:auto;">
-            <!-- Injected via JS -->
-        </div>
+        <div id="res-mp-list" style="background:rgba(255,255,255,0.05); padding:10px; border-radius:12px; display:none; max-height:100px; overflow-y:auto;"></div>
 
         <div class="btn-group">
             <button class="btn-secondary" onclick="window.shareResult()">📤</button>
@@ -465,7 +440,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
         import { getDatabase, ref, set, onValue, update, get, remove } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-database.js";
 
-        // --- 1. CONFIG & TRANSLATIONS ---
+        // CONFIG & TRANSLATIONS
         const firebaseConfig = {
             apiKey: "AIzaSyDJjo66zCwODJW1J2SoVQ2B8tIH5FPUu1A",
             authDomain: "mytube-cd424.firebaseapp.com",
@@ -505,13 +480,13 @@
             }
         };
 
-        // --- 2. GLOBAL STATE ---
+        // GLOBAL STATE
         const USER = (window.Telegram?.WebApp?.initDataUnsafe?.user) || { id: 'test_'+Math.floor(Math.random()*1000), first_name: 'Guest', language_code: 'en' };
         
         const STATE = {
             lang: localStorage.getItem('geo_lang') || (USER.language_code === 'ru' ? 'ru' : 'en'),
             mode: 'menu',
-            mpRole: null, // 'host' or 'guest'
+            mpRole: null, 
             gameId: null,
             myUid: USER.id.toString(),
             myName: USER.first_name,
@@ -523,36 +498,188 @@
             currentLoc: null,
             isLocked: false,
             mpModeSelected: 'endless',
-            players: {}, // For MP
-            history: JSON.parse(localStorage.getItem('geo_history') || '[]')
+            players: {}, 
+            history: JSON.parse(localStorage.getItem('geo_history') || '[]'),
+            totalGames: parseInt(localStorage.getItem('geo_total_games') || '0'),
+            totalScore: parseInt(localStorage.getItem('geo_total_score') || '0')
         };
 
-        // --- 3. LOCATIONS ARRAY (PLACEHOLDER) ---
         const LOCATIONS = [
-            // PASTE YOUR LOCATIONS ARRAY HERE
-            // Example:
-            { name: "Paris, France", flag: "🇫🇷", lat: 48.8566, lng: 2.3522 },
-            { name: "New York, USA", flag: "🇺🇸", lat: 40.7128, lng: -74.0060 },
-            { name: "Tokyo, Japan", flag: "🇯🇵", lat: 35.6762, lng: 139.6503 },
+            // --- RUSSIA (Existing + 8 New) ---
+            { name: "Saint Petersburg, Russia", flag: "🇷🇺", lat: 59.9311, lng: 30.3609 },
             { name: "Moscow, Russia", flag: "🇷🇺", lat: 55.7558, lng: 37.6173 },
+            { name: "Kazan, Russia", flag: "🇷🇺", lat: 55.7963, lng: 49.1088 },
+            { name: "Sochi, Russia", flag: "🇷🇺", lat: 43.5852, lng: 39.7231 },
+            { name: "Novosibirsk, Russia", flag: "🇷🇺", lat: 55.0302, lng: 82.9204 },
+            { name: "Yekaterinburg, Russia", flag: "🇷🇺", lat: 56.8389, lng: 60.6057 },
+            { name: "Vladivostok, Russia", flag: "🇷🇺", lat: 43.1198, lng: 131.8869 },
+            { name: "Nizhny Novgorod, Russia", flag: "🇷🇺", lat: 56.2965, lng: 43.9361 },
+            { name: "Kaliningrad, Russia", flag: "🇷🇺", lat: 54.7104, lng: 20.4522 },
+
+            // --- NORTH AMERICA ---
+            { name: "New York, USA", flag: "🇺🇸", lat: 40.7128, lng: -74.0060 },
+            { name: "Los Angeles, USA", flag: "🇺🇸", lat: 34.0522, lng: -118.2437 },
+            { name: "Chicago, USA", flag: "🇺🇸", lat: 41.8781, lng: -87.6298 },
+            { name: "San Francisco, USA", flag: "🇺🇸", lat: 37.7749, lng: -122.4194 },
+            { name: "Miami, USA", flag: "🇺🇸", lat: 25.7617, lng: -80.1918 },
+            { name: "Las Vegas, USA", flag: "🇺🇸", lat: 36.1699, lng: -115.1398 },
+            { name: "Seattle, USA", flag: "🇺🇸", lat: 47.6062, lng: -122.3321 },
+            { name: "Boston, USA", flag: "🇺🇸", lat: 42.3601, lng: -71.0589 },
+            { name: "Austin, USA", flag: "🇺🇸", lat: 30.2672, lng: -97.7431 },
+            { name: "Denver, USA", flag: "🇺🇸", lat: 39.7392, lng: -104.9903 },
+            { name: "New Orleans, USA", flag: "🇺🇸", lat: 29.9511, lng: -90.0715 },
+            { name: "Philadelphia, USA", flag: "🇺🇸", lat: 39.9526, lng: -75.1652 },
+            { name: "San Diego, USA", flag: "🇺🇸", lat: 32.7157, lng: -117.1611 },
+            { name: "Portland, USA", flag: "🇺🇸", lat: 45.5051, lng: -122.6750 },
+            { name: "Toronto, Canada", flag: "🇨🇦", lat: 43.6532, lng: -79.3832 },
+            { name: "Vancouver, Canada", flag: "🇨🇦", lat: 49.2827, lng: -123.1207 },
+            { name: "Montreal, Canada", flag: "🇨🇦", lat: 45.5017, lng: -73.5673 },
+            { name: "Calgary, Canada", flag: "🇨🇦", lat: 51.0447, lng: -114.0719 },
+            { name: "Ottawa, Canada", flag: "🇨🇦", lat: 45.4215, lng: -75.6972 },
+            { name: "Mexico City, Mexico", flag: "🇲🇽", lat: 19.4326, lng: -99.1332 },
+            { name: "Guadalajara, Mexico", flag: "🇲🇽", lat: 20.6597, lng: -103.3496 },
+            { name: "Monterrey, Mexico", flag: "🇲🇽", lat: 25.6866, lng: -100.3161 },
+
+            // --- SOUTH AMERICA ---
+            { name: "São Paulo, Brazil", flag: "🇧🇷", lat: -23.5505, lng: -46.6333 },
+            { name: "Rio de Janeiro, Brazil", flag: "🇧🇷", lat: -22.9068, lng: -43.1729 },
+            { name: "Brasília, Brazil", flag: "🇧🇷", lat: -15.7975, lng: -47.8919 },
+            { name: "Salvador, Brazil", flag: "🇧🇷", lat: -12.9777, lng: -38.5016 },
+            { name: "Buenos Aires, Argentina", flag: "🇦🇷", lat: -34.6037, lng: -58.3816 },
+            { name: "Mendoza, Argentina", flag: "🇦🇷", lat: -32.8895, lng: -68.8458 },
+            { name: "Santiago, Chile", flag: "🇨🇱", lat: -33.4489, lng: -70.6693 },
+            { name: "Valparaiso, Chile", flag: "🇨🇱", lat: -33.0472, lng: -71.6127 },
+            { name: "Bogotá, Colombia", flag: "🇨🇴", lat: 4.7110, lng: -74.0721 },
+            { name: "Medellín, Colombia", flag: "🇨🇴", lat: 6.2442, lng: -75.5812 },
+            { name: "Lima, Peru", flag: "🇵🇪", lat: -12.0464, lng: -77.0428 },
+            { name: "Cusco, Peru", flag: "🇵🇪", lat: -13.5320, lng: -71.9675 },
+            { name: "Quito, Ecuador", flag: "🇪🇨", lat: -0.1807, lng: -78.4678 },
+            { name: "Montevideo, Uruguay", flag: "🇺🇾", lat: -34.9011, lng: -56.1645 },
+            { name: "La Paz, Bolivia", flag: "🇧🇴", lat: -16.5004, lng: -68.1193 },
+
+            // --- EUROPE ---
             { name: "London, UK", flag: "🇬🇧", lat: 51.5074, lng: -0.1278 },
-            { name: "Sydney, Australia", flag: "🇦🇺", lat: -33.8688, lng: 151.2093 }
-            // ... (Add your full 100+ list from previous file)
+            { name: "Manchester, UK", flag: "🇬🇧", lat: 53.4808, lng: -2.2426 },
+            { name: "Edinburgh, UK", flag: "🇬🇧", lat: 55.9533, lng: -3.1883 },
+            { name: "Paris, France", flag: "🇫🇷", lat: 48.8566, lng: 2.3522 },
+            { name: "Lyon, France", flag: "🇫🇷", lat: 45.7640, lng: 4.8357 },
+            { name: "Marseille, France", flag: "🇫🇷", lat: 43.2965, lng: 5.3698 },
+            { name: "Nice, France", flag: "🇫🇷", lat: 43.7102, lng: 7.2620 },
+            { name: "Madrid, Spain", flag: "🇪🇸", lat: 40.4168, lng: -3.7038 },
+            { name: "Barcelona, Spain", flag: "🇪🇸", lat: 41.3851, lng: 2.1734 },
+            { name: "Seville, Spain", flag: "🇪🇸", lat: 37.3891, lng: -5.9845 },
+            { name: "Valencia, Spain", flag: "🇪🇸", lat: 39.4699, lng: -0.3763 },
+            { name: "Lisbon, Portugal", flag: "🇵🇹", lat: 38.7223, lng: -9.1393 },
+            { name: "Porto, Portugal", flag: "🇵🇹", lat: 41.1579, lng: -8.6291 },
+            { name: "Berlin, Germany", flag: "🇩🇪", lat: 52.5200, lng: 13.4050 },
+            { name: "Munich, Germany", flag: "🇩🇪", lat: 48.1351, lng: 11.5820 },
+            { name: "Hamburg, Germany", flag: "🇩🇪", lat: 53.5511, lng: 9.9937 },
+            { name: "Frankfurt, Germany", flag: "🇩🇪", lat: 50.1109, lng: 8.6821 },
+            { name: "Cologne, Germany", flag: "🇩🇪", lat: 50.9375, lng: 6.9603 },
+            { name: "Rome, Italy", flag: "🇮🇹", lat: 41.9028, lng: 12.4964 },
+            { name: "Milan, Italy", flag: "🇮🇹", lat: 45.4642, lng: 9.1900 },
+            { name: "Venice, Italy", flag: "🇮🇹", lat: 45.4408, lng: 12.3155 },
+            { name: "Florence, Italy", flag: "🇮🇹", lat: 43.7696, lng: 11.2558 },
+            { name: "Naples, Italy", flag: "🇮🇹", lat: 40.8518, lng: 14.2681 },
+            { name: "Amsterdam, Netherlands", flag: "🇳🇱", lat: 52.3676, lng: 4.9041 },
+            { name: "Rotterdam, Netherlands", flag: "🇳🇱", lat: 51.9244, lng: 4.4777 },
+            { name: "Brussels, Belgium", flag: "🇧🇪", lat: 50.8503, lng: 4.3517 },
+            { name: "Vienna, Austria", flag: "🇦🇹", lat: 48.2082, lng: 16.3738 },
+            { name: "Prague, Czechia", flag: "🇨🇿", lat: 50.0755, lng: 14.4378 },
+            { name: "Budapest, Hungary", flag: "🇭🇺", lat: 47.4979, lng: 19.0402 },
+            { name: "Stockholm, Sweden", flag: "🇸🇪", lat: 59.3293, lng: 18.0686 },
+            { name: "Gothenburg, Sweden", flag: "🇸🇪", lat: 57.7089, lng: 11.9746 },
+            { name: "Oslo, Norway", flag: "🇳🇴", lat: 59.9139, lng: 10.7522 },
+            { name: "Bergen, Norway", flag: "🇳🇴", lat: 60.3913, lng: 5.3221 },
+            { name: "Helsinki, Finland", flag: "🇫🇮", lat: 60.1699, lng: 24.9384 },
+            { name: "Copenhagen, Denmark", flag: "🇩🇰", lat: 55.6761, lng: 12.5683 },
+            { name: "Aarhus, Denmark", flag: "🇩🇰", lat: 56.1629, lng: 10.2039 },
+            { name: "Warsaw, Poland", flag: "🇵🇱", lat: 52.2297, lng: 21.0122 },
+            { name: "Krakow, Poland", flag: "🇵🇱", lat: 50.0647, lng: 19.9450 },
+            { name: "Gdansk, Poland", flag: "🇵🇱", lat: 54.3520, lng: 18.6466 },
+            { name: "Athens, Greece", flag: "🇬🇷", lat: 37.9838, lng: 23.7275 },
+            { name: "Thessaloniki, Greece", flag: "🇬🇷", lat: 40.6401, lng: 22.9444 },
+            { name: "Zurich, Switzerland", flag: "🇨🇭", lat: 47.3769, lng: 8.5417 },
+            { name: "Geneva, Switzerland", flag: "🇨🇭", lat: 46.2044, lng: 6.1432 },
+            { name: "Dublin, Ireland", flag: "🇮🇪", lat: 53.3498, lng: -6.2603 },
+            { name: "Zagreb, Croatia", flag: "🇭🇷", lat: 45.8150, lng: 15.9819 },
+            { name: "Dubrovnik, Croatia", flag: "🇭🇷", lat: 42.6507, lng: 18.0944 },
+            { name: "Bucharest, Romania", flag: "🇷🇴", lat: 44.4268, lng: 26.1025 },
+            { name: "Sofia, Bulgaria", flag: "🇧🇬", lat: 42.6977, lng: 23.3219 },
+            { name: "Belgrade, Serbia", flag: "🇷🇸", lat: 44.7866, lng: 20.4489 },
+            { name: "Tallinn, Estonia", flag: "🇪🇪", lat: 59.4370, lng: 24.7536 },
+            { name: "Riga, Latvia", flag: "🇱🇻", lat: 56.9496, lng: 24.1052 },
+            { name: "Vilnius, Lithuania", flag: "🇱🇹", lat: 54.6872, lng: 25.2797 },
+            { name: "Reykjavik, Iceland", flag: "🇮🇸", lat: 64.1265, lng: -21.8174 },
+
+            // --- ASIA ---
+            { name: "Istanbul, Turkey", flag: "🇹🇷", lat: 41.0082, lng: 28.9784 },
+            { name: "Ankara, Turkey", flag: "🇹🇷", lat: 39.9334, lng: 32.8597 },
+            { name: "Antalya, Turkey", flag: "🇹🇷", lat: 36.8969, lng: 30.7133 },
+            { name: "Tokyo, Japan", flag: "🇯🇵", lat: 35.6762, lng: 139.6503 },
+            { name: "Osaka, Japan", flag: "🇯🇵", lat: 34.6937, lng: 135.5023 },
+            { name: "Kyoto, Japan", flag: "🇯🇵", lat: 35.0116, lng: 135.7681 },
+            { name: "Sapporo, Japan", flag: "🇯🇵", lat: 43.0618, lng: 141.3545 },
+            { name: "Fukuoka, Japan", flag: "🇯🇵", lat: 33.5902, lng: 130.4017 },
+            { name: "Seoul, South Korea", flag: "🇰🇷", lat: 37.5665, lng: 126.9780 },
+            { name: "Busan, South Korea", flag: "🇰🇷", lat: 35.1796, lng: 129.0756 },
+            { name: "Taipei, Taiwan", flag: "🇹🇼", lat: 25.0330, lng: 121.5654 },
+            { name: "Kaohsiung, Taiwan", flag: "🇹🇼", lat: 22.6273, lng: 120.3014 },
+            { name: "Bangkok, Thailand", flag: "🇹🇭", lat: 13.7563, lng: 100.5018 },
+            { name: "Chiang Mai, Thailand", flag: "🇹🇭", lat: 18.7883, lng: 98.9853 },
+            { name: "Singapore", flag: "🇸🇬", lat: 1.3521, lng: 103.8198 },
+            { name: "Kuala Lumpur, Malaysia", flag: "🇲🇾", lat: 3.1390, lng: 101.6869 },
+            { name: "Jakarta, Indonesia", flag: "🇮🇩", lat: -6.2088, lng: 106.8456 },
+            { name: "Bali (Denpasar), Indonesia", flag: "🇮🇩", lat: -8.6705, lng: 115.2126 },
+            { name: "Manila, Philippines", flag: "🇵🇭", lat: 14.5995, lng: 120.9842 },
+            { name: "Cebu City, Philippines", flag: "🇵🇭", lat: 10.3157, lng: 123.8854 },
+            { name: "Ho Chi Minh City, Vietnam", flag: "🇻🇳", lat: 10.8231, lng: 106.6297 },
+            { name: "Hanoi, Vietnam", flag: "🇻🇳", lat: 21.0285, lng: 105.8542 },
+            { name: "Dubai, UAE", flag: "🇦🇪", lat: 25.2048, lng: 55.2708 },
+            { name: "Abu Dhabi, UAE", flag: "🇦🇪", lat: 24.4539, lng: 54.3773 },
+            { name: "Doha, Qatar", flag: "🇶🇦", lat: 25.2854, lng: 51.5310 },
+            { name: "Tel Aviv, Israel", flag: "🇮🇱", lat: 32.0853, lng: 34.7818 },
+            { name: "Jerusalem, Israel", flag: "🇮🇱", lat: 31.7683, lng: 35.2137 },
+            { name: "Mumbai, India", flag: "🇮🇳", lat: 19.0760, lng: 72.8777 },
+            { name: "New Delhi, India", flag: "🇮🇳", lat: 28.6139, lng: 77.2090 },
+            { name: "Bangalore, India", flag: "🇮🇳", lat: 12.9716, lng: 77.5946 },
+            { name: "Colombo, Sri Lanka", flag: "🇱🇰", lat: 6.9271, lng: 79.8612 },
+            { name: "Ulaanbaatar, Mongolia", flag: "🇲🇳", lat: 47.9181, lng: 106.9176 },
+
+            // --- AFRICA ---
+            { name: "Cape Town, South Africa", flag: "🇿🇦", lat: -33.9249, lng: 18.4241 },
+            { name: "Johannesburg, South Africa", flag: "🇿🇦", lat: -26.2041, lng: 28.0473 },
+            { name: "Durban, South Africa", flag: "🇿🇦", lat: -29.8587, lng: 31.0218 },
+            { name: "Nairobi, Kenya", flag: "🇰🇪", lat: -1.2921, lng: 36.8219 },
+            { name: "Tunis, Tunisia", flag: "🇹🇳", lat: 36.8065, lng: 10.1815 },
+            { name: "Cairo, Egypt", flag: "🇪🇬", lat: 30.0444, lng: 31.2357 },
+            { name: "Marrakech, Morocco", flag: "🇲🇦", lat: 31.6295, lng: -7.9811 },
+            { name: "Casablanca, Morocco", flag: "🇲🇦", lat: 33.5731, lng: -7.5898 },
+            { name: "Dakar, Senegal", flag: "🇸🇳", lat: 14.7167, lng: -17.4677 },
+            { name: "Accra, Ghana", flag: "🇬🇭", lat: 5.6037, lng: -0.1870 },
+            { name: "Lagos, Nigeria", flag: "🇳🇬", lat: 6.5244, lng: 3.3792 },
+
+            // --- OCEANIA ---
+            { name: "Sydney, Australia", flag: "🇦🇺", lat: -33.8688, lng: 151.2093 },
+            { name: "Melbourne, Australia", flag: "🇦🇺", lat: -37.8136, lng: 144.9631 },
+            { name: "Brisbane, Australia", flag: "🇦🇺", lat: -27.4698, lng: 153.0251 },
+            { name: "Perth, Australia", flag: "🇦🇺", lat: -31.9505, lng: 115.8605 },
+            { name: "Adelaide, Australia", flag: "🇦🇺", lat: -34.9285, lng: 138.6007 },
+            { name: "Hobart, Australia", flag: "🇦🇺", lat: -42.8821, lng: 147.3272 },
+            { name: "Auckland, New Zealand", flag: "🇳🇿", lat: -36.8485, lng: 174.7633 },
+            { name: "Wellington, New Zealand", flag: "🇳🇿", lat: -41.2865, lng: 174.7762 },
+            { name: "Christchurch, New Zealand", flag: "🇳🇿", lat: -43.5321, lng: 172.6362 }
         ];
 
         let map, mly, guessMarker, resultLine, resultMarker, oppMarkers = [];
 
-        // --- 4. CORE FUNCTIONS (INIT & I18N) ---
         function init() {
-            // Map
             map = L.map('map', { zoomControl: false }).setView([20, 0], 2);
             L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '©CARTO' }).addTo(map);
 
-            // Mapillary
             const { Viewer } = mapillary;
             mly = new Viewer({ accessToken: MLY_TOKEN, container: 'mly', component: { cover: false, sequence: false } });
 
-            // Events
             map.on('click', (e) => {
                 if(STATE.isLocked) return;
                 if(guessMarker) map.removeLayer(guessMarker);
@@ -562,7 +689,6 @@
                 btn.classList.add('active');
                 btn.innerText = t('btn_guess_confirm');
                 btn.disabled = false;
-                
                 if(window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.selectionChanged();
             });
 
@@ -571,14 +697,12 @@
             document.getElementById('main-menu').classList.remove('hidden');
         }
 
-        // Translation Logic
         function t(key) { return TR[STATE.lang][key] || key; }
         
         function applyTranslations() {
             document.querySelectorAll('[data-i18n]').forEach(el => {
                 el.innerText = t(el.getAttribute('data-i18n'));
             });
-            // Dynamic text updates
             document.getElementById('settings-btn').innerText = STATE.lang === 'en' ? '🇺🇸' : '🇷🇺';
         }
 
@@ -588,8 +712,8 @@
             applyTranslations();
         };
 
-        // --- 5. UI FLOW ---
         window.showMainMenu = () => {
+            document.body.classList.remove('game-active');
             document.querySelectorAll('.full-screen-menu').forEach(el => el.classList.add('hidden'));
             document.getElementById('main-menu').classList.remove('hidden');
         };
@@ -605,24 +729,18 @@
             document.getElementById('mp-mode-challenge').classList.toggle('selected', mode === 'challenge');
         };
 
-        // --- 6. PROFILE SYSTEM ---
+        // --- PROFILE LOGIC ---
         window.openProfile = () => {
             document.getElementById('main-menu').classList.add('hidden');
             document.getElementById('profile-screen').classList.remove('hidden');
             
-            // Stats
-            const hist = STATE.history;
-            const totalGames = hist.length;
-            const totalScore = hist.reduce((acc, curr) => acc + (curr.pts || 0), 0);
-            
             document.getElementById('pf-name').innerText = STATE.myName;
-            document.getElementById('pf-total-games').innerText = totalGames;
-            document.getElementById('pf-total-score').innerText = totalScore;
+            document.getElementById('pf-total-games').innerText = STATE.totalGames;
+            document.getElementById('pf-total-score').innerText = STATE.totalScore;
             
-            // History
             const list = document.getElementById('history-list');
             list.innerHTML = '';
-            [...hist].reverse().slice(0, 30).forEach(h => {
+            [...STATE.history].reverse().slice(0, 30).forEach(h => {
                 const div = document.createElement('div');
                 div.className = 'history-item';
                 div.innerHTML = `<div>${h.date}</div><div class="h-score">+${h.pts}</div>`;
@@ -632,23 +750,31 @@
 
         window.closeProfile = () => window.showMainMenu();
 
+        function updateLocalStats(pts) {
+            // Save TOTAL SCORE immediately on every round
+            STATE.totalScore += pts;
+            localStorage.setItem('geo_total_score', STATE.totalScore.toString());
+        }
+
         function saveGameToHistory(pts) {
-            const entry = {
-                date: new Date().toLocaleDateString(),
-                pts: pts,
-                loc: STATE.currentLoc ? STATE.currentLoc.city.name : 'Unknown'
-            };
+            // Only add a "History Item" when a game fully ends, or just track accumulated score
+            STATE.totalGames++;
+            localStorage.setItem('geo_total_games', STATE.totalGames.toString());
+            
+            const entry = { date: new Date().toLocaleDateString(), pts: pts };
             STATE.history.push(entry);
             localStorage.setItem('geo_history', JSON.stringify(STATE.history));
         }
 
-        // --- 7. GAME MODES & LOGIC ---
+        // --- GAME LOGIC ---
         window.startEndless = () => {
+            document.body.classList.add('game-active');
             STATE.mode = 'endless'; STATE.score = 0;
             updateHUD(); startGameLoop();
         };
 
         window.startChallenge = () => {
+            document.body.classList.add('game-active');
             STATE.mode = 'challenge'; STATE.round = 1; STATE.score = 0; STATE.maxRounds = 5;
             updateHUD(); startGameLoop();
         };
@@ -670,15 +796,12 @@
         }
 
         async function pickRandomLocation() {
-            // Safety fallback if user forgets to paste locations
             if(LOCATIONS.length < 1) return { id: '5177821635678829', lat: 48.8566, lng: 2.3522, city: { name: "Paris", flag: "🇫🇷"} };
-
             const city = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
             const range = 0.04;
             const rLat = city.lat + (Math.random() * range * 2 - range);
             const rLng = city.lng + (Math.random() * range * 2 - range);
             const bbox = `${rLng-0.005},${rLat-0.005},${rLng+0.005},${rLat+0.005}`;
-
             try {
                 const res = await fetch(`https://graph.mapillary.com/images?access_token=${MLY_TOKEN}&fields=id,geometry&bbox=${bbox}&limit=1`);
                 const data = await res.json();
@@ -756,7 +879,7 @@
             if(STATE.timeLeft < 10) el.classList.add('warning'); else el.classList.remove('warning');
         }
 
-        // --- 8. MULTIPLAYER (PARTY MODE) ---
+        // --- MULTIPLAYER ---
         window.createRoom = () => {
             const btn = document.getElementById('btn-create');
             btn.classList.add('loading');
@@ -770,9 +893,7 @@
                 mode: STATE.mpModeSelected,
                 round: 1,
                 host: STATE.myUid,
-                players: {
-                    [STATE.myUid]: { name: STATE.myName, score: 0, avatar: '👑' }
-                }
+                players: { [STATE.myUid]: { name: STATE.myName, score: 0, avatar: '👑' } }
             };
 
             set(ref(db, 'games/' + code), initialData).then(() => {
@@ -793,12 +914,9 @@
                     STATE.gameId = code;
                     STATE.mpRole = 'guest';
                     STATE.mode = 'multi';
-                    
-                    // Add myself to players
                     update(ref(db, `games/${code}/players/${STATE.myUid}`), {
                         name: STATE.myName, score: 0, avatar: '👤'
                     });
-                    
                     enterLobby(code);
                 } else {
                     alert("Room not found");
@@ -810,10 +928,7 @@
             document.getElementById('friend-menu').classList.add('hidden');
             document.getElementById('lobby-screen').classList.remove('hidden');
             document.getElementById('lobby-code-display').innerText = code;
-            
-            // Show host controls if host
             if(STATE.mpRole === 'host') document.getElementById('host-actions').classList.remove('hidden');
-            
             listenToLobby(code);
         }
 
@@ -822,7 +937,6 @@
         };
         
         window.leaveLobby = () => {
-            // Remove self
             remove(ref(db, `games/${STATE.gameId}/players/${STATE.myUid}`));
             window.location.reload();
         };
@@ -835,28 +949,23 @@
             onValue(ref(db, 'games/' + code), (snap) => {
                 const data = snap.val();
                 if(!data) { alert("Room closed"); window.location.reload(); return; }
-
-                // Check if kicked
                 if(!data.players || !data.players[STATE.myUid]) {
                     alert(t('msg_kicked')); window.location.reload(); return;
                 }
-
-                // Update Player List
                 STATE.players = data.players;
                 renderPlayerList(data.players, data.host);
 
-                // Start Game Trigger
                 if(data.status === 'starting' || data.status === 'playing') {
                     document.getElementById('lobby-screen').classList.add('hidden');
+                    document.body.classList.add('game-active');
                     if(STATE.mpRole === 'host' && data.status === 'starting') {
-                        // Host picks loc
                         update(ref(db, `games/${code}`), { status: 'playing' });
                         document.getElementById('loading').classList.remove('hidden');
                         pickRandomLocation().then(loc => {
                             update(ref(db, `games/${code}`), { location: loc });
                         });
                     }
-                    listenToGame(code); // Switch to game listener
+                    listenToGame(code);
                 }
             });
         }
@@ -869,8 +978,6 @@
                 const div = document.createElement('div');
                 div.className = 'player-item';
                 let html = `<div class="player-info"><div class="player-avatar">${p.avatar}</div> <span>${p.name}</span></div>`;
-                
-                // Host Kick Button
                 if(STATE.mpRole === 'host' && uid !== STATE.myUid) {
                     html += `<button class="kick-btn" onclick="window.hostKick('${uid}')">×</button>`;
                 }
@@ -880,7 +987,6 @@
         }
 
         function listenToGame(code) {
-            // HUD specific for MP
             document.getElementById('mp-scores').style.display = 'flex';
             if(STATE.mpRole === 'host') document.getElementById('host-controls').style.display = 'flex';
 
@@ -888,10 +994,14 @@
                 const data = snap.val();
                 if(!data) return;
 
-                // Sync Scores in HUD
+                // Sync Loading Screen (Guest side)
+                if(data.status === 'next_round') {
+                    document.getElementById('loading').classList.remove('hidden');
+                    document.getElementById('result-sheet').classList.remove('show');
+                }
+
                 renderMpScores(data.players);
 
-                // Location Sync
                 if(data.location && (!STATE.currentLoc || STATE.currentLoc.id !== data.location.id)) {
                     STATE.currentLoc = data.location;
                     STATE.round = data.round;
@@ -900,17 +1010,13 @@
                     updateHUD();
                     loadLocation(data.location);
                     resetMapUI();
-                    
                     if(data.mode === 'challenge') startTimer(120);
                 }
 
-                // Force Round End (by Host)
                 if(data.forceEndRound && !STATE.isLocked && !STATE.resultShown) {
-                     window.submitGuess(true); // Auto submit blank
+                     window.submitGuess(true);
                 }
 
-                // Show Results Logic
-                // If everyone guessed OR host forced end
                 const playerIds = Object.keys(data.players);
                 const guesses = data.guesses || {};
                 const allGuessed = playerIds.every(uid => guesses[uid]);
@@ -938,7 +1044,7 @@
             update(ref(db, `games/${STATE.gameId}`), { status: 'results' });
         };
 
-        // --- 9. SUBMISSION & RESULTS ---
+        // --- SUBMIT ---
         window.submitGuess = (force = false) => {
             if((!guessMarker && !force) || STATE.isLocked) return;
             
@@ -952,6 +1058,9 @@
 
             if(window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
 
+            // --- IMPORTANT: SAVE POINTS TO PROFILE IMMEDIATELY ---
+            updateLocalStats(pts);
+
             if(STATE.mode === 'multi') {
                 document.getElementById('confirm-btn').innerText = t('btn_wait');
                 update(ref(db, `games/${STATE.gameId}/guesses/${STATE.myUid}`), {
@@ -961,13 +1070,11 @@
             }
 
             STATE.score += pts;
-            saveGameToHistory(pts);
             showSingleResult(uLat, aLat, dist, pts);
         };
 
         function showSingleResult(uLat, aLat, dist, pts) {
             setupResultMap(uLat, aLat);
-            
             document.getElementById('res-dist').innerText = formatDist(dist);
             document.getElementById('res-pts').innerText = "+" + pts + " pts";
             document.getElementById('res-loc-name').innerHTML = STATE.currentLoc.city.name + " " + STATE.currentLoc.city.flag;
@@ -978,11 +1085,11 @@
             if (STATE.mode === 'challenge' && STATE.round >= STATE.maxRounds) {
                 nextBtnText.innerText = t('btn_finish');
                 nextBtn.onclick = showSummary;
+                saveGameToHistory(STATE.score); // Save to history list only at end
             } else {
                 nextBtnText.innerText = t('btn_next');
                 nextBtn.onclick = window.nextRound;
             }
-
             document.getElementById('result-sheet').classList.add('show');
         }
 
@@ -990,10 +1097,8 @@
             const actual = L.latLng(locData.lat, locData.lng);
             const myGuess = guesses[STATE.myUid];
             
-            // Map Setup
             setupResultMap(myGuess ? L.latLng(myGuess.lat, myGuess.lng) : actual, actual);
             
-            // Plot others
             Object.keys(guesses).forEach(uid => {
                 if(uid === STATE.myUid) return;
                 const g = guesses[uid];
@@ -1003,7 +1108,6 @@
                 oppMarkers.push(m, l);
             });
 
-            // My Stats
             const pts = myGuess ? myGuess.pts : 0;
             const dist = myGuess ? map.distance(L.latLng(myGuess.lat, myGuess.lng), actual) : 0;
             
@@ -1011,7 +1115,6 @@
             document.getElementById('res-pts').innerText = "+" + pts + " pts";
             document.getElementById('res-loc-name').innerHTML = STATE.currentLoc.city.name + " " + STATE.currentLoc.city.flag;
 
-            // Leaderboard List
             const list = document.getElementById('res-mp-list');
             list.style.display = 'block';
             list.innerHTML = '';
@@ -1022,26 +1125,22 @@
                 list.appendChild(r);
             });
 
-            // Next Button Logic
             const nextBtn = document.getElementById('next-btn');
             const nextBtnText = nextBtn.querySelector('.btn-content');
             
             if (STATE.mpModeSelected === 'challenge' && STATE.round >= STATE.maxRounds) {
                 nextBtnText.innerText = t('btn_finish');
                 nextBtn.onclick = showSummary;
-                saveGameToHistory(STATE.score); // Save total MP score
+                saveGameToHistory(STATE.score); 
             } else {
                 nextBtnText.innerText = (STATE.mpRole === 'host') ? t('btn_next') : t('btn_wait');
                 nextBtn.disabled = (STATE.mpRole !== 'host');
                 nextBtn.onclick = (STATE.mpRole === 'host') ? window.nextRound : null;
                 
-                // Host updates scores permanently
                 if(STATE.mpRole === 'host') {
                     get(ref(db, `games/${STATE.gameId}/players`)).then(snap => {
                         const p = snap.val();
-                        Object.keys(guesses).forEach(uid => {
-                            if(p[uid]) p[uid].score += guesses[uid].pts;
-                        });
+                        Object.keys(guesses).forEach(uid => { if(p[uid]) p[uid].score += guesses[uid].pts; });
                         update(ref(db, `games/${STATE.gameId}/players`), p);
                     });
                 }
@@ -1070,13 +1169,14 @@
                 startGameLoop();
             } else if (STATE.mode === 'multi' && STATE.mpRole === 'host') {
                 const nextR = STATE.round + 1;
+                // Sets status to 'next_round' so everyone shows loading screen immediately
                 update(ref(db, `games/${STATE.gameId}`), {
                     status: 'next_round',
                     round: nextR,
                     guesses: null,
-                    forceEndRound: null // Reset force flag
+                    forceEndRound: null
                 }).then(() => {
-                    document.getElementById('loading').classList.remove('hidden');
+                    // Then start fetching new location
                     pickRandomLocation().then(loc => {
                         update(ref(db, `games/${STATE.gameId}`), { location: loc, status: 'playing' });
                     });
@@ -1100,7 +1200,6 @@
         function formatDist(m) { return m < 1000 ? Math.round(m) + " m" : (m/1000).toFixed(1) + " km"; }
 
         window.shareResult = () => {
-            // Simple share via Telegram link
             const text = `GeoGuessr: I scored ${STATE.score} pts!`;
             const url = `https://t.me/share/url?url=${encodeURIComponent("t.me/geogur_bot/app")}&text=${encodeURIComponent(text)}`;
             if(window.Telegram?.WebApp) window.Telegram.WebApp.openTelegramLink(url);
