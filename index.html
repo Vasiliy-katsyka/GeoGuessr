@@ -342,12 +342,11 @@
 
     <!-- LOADING -->
     <div id="loading">
-        <!-- Lottie Loader -->
         <lottie-player 
             src="https://raw.githubusercontent.com/Vasiliy-katsyka/GeoGuessr/main/ChicklingEmoji_AgAD1S0AAkOY8Ug.json" 
             background="transparent" 
             speed="1" 
-            style="width: 150px; height: 150px;" 
+            style="width: 150px; height: 150px; margin-bottom: 30px;" 
             loop autoplay>
         </lottie-player>
         <h3 id="load-text" style="color: #666; font-weight:400; letter-spacing:1px; margin-top:-10px;">Loading...</h3>
@@ -356,7 +355,6 @@
     <!-- MAIN MENU -->
     <div id="main-menu" class="full-screen-menu hidden">
         <div class="menu-overlay"></div>
-        <!-- Title Lottie -->
         <lottie-player 
             src="https://raw.githubusercontent.com/Vasiliy-katsyka/GeoGuessr/main/RestrictedEmoji_AgADHFgAAt1K8Eo.json" 
             background="transparent" 
@@ -397,7 +395,7 @@
         <div class="stat-grid">
             <div class="stat-card">
                 <div class="stat-val" id="pf-total-games">0</div>
-                <div class="stat-label" data-i18n="lbl_games">Games</div>
+                <div class="stat-label" data-i18n="lbl_games">Rounds</div>
             </div>
             <div class="stat-card">
                 <div class="stat-val" id="pf-total-score">0</div>
@@ -409,6 +407,8 @@
         <div id="history-list" class="history-list" style="width:100%; padding:0 20px; box-sizing:border-box;"></div>
 
         <button class="btn-main btn-dark" style="margin-top: 30px;" onclick="window.closeProfile()" data-i18n="btn_back">Back</button>
+        <!-- CLEAR DATA BUTTON -->
+        <button class="btn-main btn-red" style="margin-top: 10px; opacity:0.8; transform:scale(0.9);" onclick="window.clearData()">🗑️ Clear Data</button>
     </div>
 
     <!-- FRIEND MENU -->
@@ -416,7 +416,7 @@
         <div class="menu-overlay"></div>
         <h2 style="margin-bottom: 20px; font-size:2rem;" data-i18n="friend_mode">Party Mode</h2>
         
-        <div class="glass-panel" style="padding:25px; width:100%; max-width:350px; margin-bottom:20px; display:flex; flex-direction:column; align-items:center;">
+        <div class="glass-panel friend-panel">
             <h4 style="margin:0 0 15px 0; color:#ccc; font-size:0.8rem; text-transform:uppercase;" data-i18n="lbl_create">Create Room</h4>
             <div class="toggle-group" style="width:100%;">
                 <button id="mp-mode-endless" class="toggle-btn selected" onclick="window.selectMpMode('endless')" data-i18n="mode_endless">Endless</button>
@@ -430,7 +430,7 @@
 
         <div style="color:#aaa; font-weight:bold; margin-bottom: 20px;">— OR —</div>
 
-        <div class="glass-panel" style="padding:25px; width:100%; max-width:350px; text-align:center; display:flex; flex-direction:column; align-items:center;">
+        <div class="glass-panel friend-panel" style="text-align:center;">
             <h4 style="margin:0 0 15px 0; color:#ccc; font-size:0.8rem; text-transform:uppercase;" data-i18n="lbl_join">Join Room</h4>
             <input type="text" id="join-code" class="input-code" placeholder="CODE" maxlength="5">
             <button id="btn-join" class="btn-main btn-blue" style="width:100%; margin:0;" onclick="window.joinRoom()">
@@ -465,13 +465,12 @@
             <div id="timer-box">02:00</div>
             <div id="host-controls" class="hidden">
                 <span style="font-size:10px; color:#aaa; margin-bottom:2px;">ADMIN</span>
-                <button class="mini-btn" style="background:rgba(255,255,255,0.1); border:none; color:white; padding:5px; border-radius:5px;" onclick="window.hostForceRoundEnd()" data-i18n="btn_force_end">End Round</button>
+                <button class="mini-btn" onclick="window.hostForceRoundEnd()" data-i18n="btn_force_end">End Round</button>
             </div>
         </div>
         <div id="score-box">
             <div class="score-row" id="round-indicator" style="display:none; color:#aaa; font-size:0.8rem;">ROUND 1/5</div>
             <div class="score-row"><span data-i18n="lbl_me">YOU</span> <span id="score-me" class="score-val">0</span></div>
-            <!-- MP Score List -->
             <div id="mp-scores" style="display:none; flex-direction:column; gap:2px; margin-top:5px; border-top:1px solid rgba(255,255,255,0.1); padding-top:5px;"></div>
         </div>
     </div>
@@ -495,8 +494,7 @@
             </div>
         </div>
         
-        <!-- Multi Player Results List -->
-        <div id="res-mp-list" style="background:rgba(255,255,255,0.05); padding:10px; border-radius:12px; display:none; max-height:100px; overflow-y:auto;"></div>
+        <div id="res-mp-list" style="background:rgba(255,255,255,0.05); padding:10px; border-radius:12px; display:none; max-height:100px; overflow-y:auto; margin-top:10px;"></div>
 
         <div class="btn-group">
             <button class="btn-secondary" onclick="window.shareResult()">📤</button>
@@ -508,7 +506,7 @@
     </div>
 
     <!-- SUMMARY MODAL -->
-    <div id="summary-modal" style="position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:7000; display:none; flex-direction:column; align-items:center; justify-content:center;">
+    <div id="summary-modal" style="position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:7000; display:none; flex-direction:column; align-items:center; justify-content:center;">
         <h1 style="text-transform:uppercase; letter-spacing:2px;" data-i18n="lbl_game_over">Game Over</h1>
         <div class="summary-score" id="final-score" style="font-size:4rem; font-weight:900; background:var(--primary-grad); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin:20px 0;">0</div>
         <button class="btn-main btn-blue" onclick="window.location.reload()" data-i18n="btn_menu">Menu</button>
@@ -546,7 +544,7 @@
                 lbl_share_code: "Share code with friends", lbl_waiting: "Waiting for players...", btn_leave: "Leave", btn_start_game: "Start Game",
                 lbl_me: "YOU", btn_force_end: "End Round", btn_guess_tap: "Tap map to guess", btn_guess_confirm: "CONFIRM GUESS", btn_wait: "WAITING...",
                 lbl_location: "Location", btn_next: "Play Next", btn_finish: "Finish Game", lbl_game_over: "Game Over", btn_menu: "Main Menu",
-                pf_rank: "Explorer", lbl_games: "Games", lbl_score: "Total XP", lbl_history: "History",
+                pf_rank: "Explorer", lbl_games: "Rounds", lbl_score: "Total XP", lbl_history: "History",
                 msg_kicked: "You were kicked from the room."
             },
             ru: {
@@ -557,7 +555,7 @@
                 lbl_share_code: "Отправь код друзьям", lbl_waiting: "Ждем игроков...", btn_leave: "Выйти", btn_start_game: "Начать игру",
                 lbl_me: "ВЫ", btn_force_end: "Завершить", btn_guess_tap: "Нажми на карту", btn_guess_confirm: "ПОДТВЕРДИТЬ", btn_wait: "ОЖИДАНИЕ...",
                 lbl_location: "Локация", btn_next: "Дальше", btn_finish: "Финиш", lbl_game_over: "Конец игры", btn_menu: "В меню",
-                pf_rank: "Исследователь", lbl_games: "Игры", lbl_score: "Всего XP", lbl_history: "История",
+                pf_rank: "Исследователь", lbl_games: "Раунды", lbl_score: "Всего XP", lbl_history: "История",
                 msg_kicked: "Вы были исключены из комнаты."
             }
         };
@@ -586,6 +584,7 @@
             totalScore: parseInt(localStorage.getItem('geo_total_score') || '0')
         };
 
+        // --- PASTE YOUR LOCATIONS HERE (KEEP EXISTING) ---
         const LOCATIONS = [
             // --- RUSSIA (Existing + 8 New) ---
             { name: "Saint Petersburg, Russia", flag: "🇷🇺", lat: 59.9311, lng: 30.3609 },
@@ -825,28 +824,25 @@
             [...STATE.history].reverse().slice(0, 30).forEach(h => {
                 const div = document.createElement('div');
                 div.className = 'history-item';
-                div.innerHTML = `<div>${h.date}</div><div class="h-score">+${h.pts}</div>`;
+                div.innerHTML = `<div>${h.loc || 'Unknown'}</div><div class="h-score">+${h.pts}</div>`;
                 list.appendChild(div);
             });
         };
 
         window.closeProfile = () => window.showMainMenu();
 
-        function updateLocalStats(pts) {
-            // Save TOTAL SCORE immediately on every round
-            STATE.totalScore += pts;
-            localStorage.setItem('geo_total_score', STATE.totalScore.toString());
-        }
-
-        function saveGameToHistory(pts) {
-            // Only add a "History Item" when a game fully ends, or just track accumulated score
-            STATE.totalGames++;
-            localStorage.setItem('geo_total_games', STATE.totalGames.toString());
+        window.clearData = () => {
+            if(!confirm('Are you sure you want to delete all history?')) return;
+            localStorage.removeItem('geo_history');
+            localStorage.removeItem('geo_total_games');
+            localStorage.removeItem('geo_total_score');
             
-            const entry = { date: new Date().toLocaleDateString(), pts: pts };
-            STATE.history.push(entry);
-            localStorage.setItem('geo_history', JSON.stringify(STATE.history));
-        }
+            STATE.history = [];
+            STATE.totalGames = 0;
+            STATE.totalScore = 0;
+            
+            window.openProfile(); // Refresh UI
+        };
 
         // --- GAME LOGIC ---
         window.startEndless = () => {
@@ -1076,7 +1072,6 @@
                 const data = snap.val();
                 if(!data) return;
 
-                // Sync Loading Screen (Guest side)
                 if(data.status === 'next_round') {
                     document.getElementById('loading').classList.remove('hidden');
                     document.getElementById('result-sheet').classList.remove('show');
@@ -1140,8 +1135,20 @@
 
             if(window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
 
-            // --- IMPORTANT: SAVE POINTS TO PROFILE IMMEDIATELY ---
-            updateLocalStats(pts);
+            // --- SAVE HISTORY IMMEDIATELY (Every Round) ---
+            STATE.totalScore += pts;
+            STATE.totalGames++; 
+            localStorage.setItem('geo_total_score', STATE.totalScore.toString());
+            localStorage.setItem('geo_total_games', STATE.totalGames.toString());
+
+            const historyItem = { 
+                date: new Date().toLocaleDateString(), 
+                pts: pts,
+                loc: STATE.currentLoc ? (STATE.currentLoc.city.name + " " + STATE.currentLoc.city.flag) : "Unknown" 
+            };
+            STATE.history.push(historyItem);
+            localStorage.setItem('geo_history', JSON.stringify(STATE.history));
+            // ----------------------------------------------
 
             if(STATE.mode === 'multi') {
                 document.getElementById('confirm-btn').innerText = t('btn_wait');
@@ -1167,7 +1174,6 @@
             if (STATE.mode === 'challenge' && STATE.round >= STATE.maxRounds) {
                 nextBtnText.innerText = t('btn_finish');
                 nextBtn.onclick = showSummary;
-                saveGameToHistory(STATE.score); // Save to history list only at end
             } else {
                 nextBtnText.innerText = t('btn_next');
                 nextBtn.onclick = window.nextRound;
@@ -1213,7 +1219,6 @@
             if (STATE.mpModeSelected === 'challenge' && STATE.round >= STATE.maxRounds) {
                 nextBtnText.innerText = t('btn_finish');
                 nextBtn.onclick = showSummary;
-                saveGameToHistory(STATE.score); 
             } else {
                 nextBtnText.innerText = (STATE.mpRole === 'host') ? t('btn_next') : t('btn_wait');
                 nextBtn.disabled = (STATE.mpRole !== 'host');
@@ -1251,14 +1256,12 @@
                 startGameLoop();
             } else if (STATE.mode === 'multi' && STATE.mpRole === 'host') {
                 const nextR = STATE.round + 1;
-                // Sets status to 'next_round' so everyone shows loading screen immediately
                 update(ref(db, `games/${STATE.gameId}`), {
                     status: 'next_round',
                     round: nextR,
                     guesses: null,
                     forceEndRound: null
                 }).then(() => {
-                    // Then start fetching new location
                     pickRandomLocation().then(loc => {
                         update(ref(db, `games/${STATE.gameId}`), { location: loc, status: 'playing' });
                     });
@@ -1291,4 +1294,3 @@
         init();
     </script>
 </body>
-</html>
