@@ -295,7 +295,7 @@
             src="https://raw.githubusercontent.com/Vasiliy-katsyka/GeoGuessr/main/ChicklingEmoji_AgAD1S0AAkOY8Ug.json" 
             background="transparent" speed="1" style="width: 150px; height: 150px; margin-bottom: 20px;" loop autoplay>
         </lottie-player>
-        <h3 id="load-text" style="color: #666; font-weight:400; letter-spacing:1px;">Loading...</h3>
+        <h3 id="load-text" style="color: #666; font-weight:400; letter-spacing:1px;" data-i18n="lbl_loading">Loading...</h3>
     </div>
 
     <!-- MAIN MENU -->
@@ -316,7 +316,6 @@
             <span class="btn-content" data-i18n="btn_challenge">⏱️ Challenge Mode</span>
             <div class="btn-spinner"></div>
         </button>
-        <!-- NEW BUTTON: COUNTRY MODE -->
         <button class="btn-main btn-purple" onclick="window.openCountryMenu()">
             <span class="btn-content" data-i18n="btn_country">🌍 Country Mode</span>
         </button>
@@ -330,12 +329,12 @@
 
     <!-- COUNTRY SELECT MENU -->
     <div id="country-menu" class="full-screen-menu hidden">
-        <h2 style="margin-bottom:20px;">Select Country</h2>
+        <h2 style="margin-bottom:20px;" data-i18n="lbl_select_country">Select Country</h2>
         <div id="country-grid"></div>
         <!-- Mode Select for Country -->
         <div style="display:flex; gap:10px; width:100%; max-width:340px; margin-top:10px;">
-            <button id="cm-btn-endless" class="btn-main btn-dark" style="margin:0;" onclick="window.startCountryGame('endless')">Endless</button>
-            <button id="cm-btn-chall" class="btn-main btn-dark" style="margin:0;" onclick="window.startCountryGame('challenge')">Timed</button>
+            <button id="cm-btn-endless" class="btn-main btn-dark" style="margin:0;" onclick="window.startCountryGame('endless')" data-i18n="mode_endless">Endless</button>
+            <button id="cm-btn-chall" class="btn-main btn-dark" style="margin:0;" onclick="window.startCountryGame('challenge')" data-i18n="mode_timed">Timed</button>
         </div>
         <button class="btn-main btn-red" style="margin-top:20px; width:auto;" onclick="window.showMainMenu()" data-i18n="btn_back">Back</button>
     </div>
@@ -357,7 +356,7 @@
         <h3 style="align-self: flex-start; margin-left:20px;" data-i18n="lbl_history">History</h3>
         <div id="history-list" style="width:100%; max-width:340px; max-height:200px; overflow-y:auto;"></div>
         <button class="btn-main btn-dark" style="margin-top:20px;" onclick="window.closeProfile()" data-i18n="btn_back">Back</button>
-        <button class="btn-main btn-red" style="transform:scale(0.8);" onclick="window.clearData()">🗑️ Reset</button>
+        <button class="btn-main btn-red" style="transform:scale(0.8);" onclick="window.clearData()" data-i18n="btn_reset">🗑️ Reset</button>
     </div>
 
     <!-- FRIEND MENU -->
@@ -365,7 +364,7 @@
         <h2 data-i18n="friend_mode">Party Mode</h2>
         
         <div class="glass-panel" style="padding:25px; width:100%; max-width:340px; margin-bottom:20px;">
-            <h4 style="margin:0 0 10px 0; opacity:0.7;">HOST</h4>
+            <h4 style="margin:0 0 10px 0; opacity:0.7;" data-i18n="lbl_host">HOST</h4>
             <button id="btn-create" class="btn-main btn-green" style="margin:0;" onclick="window.createRoom()">
                 <span class="btn-content" data-i18n="btn_create_play">Create Room</span>
                 <div class="btn-spinner"></div>
@@ -373,10 +372,10 @@
         </div>
 
         <div class="glass-panel" style="padding:25px; width:100%; max-width:340px; text-align:center;">
-            <h4 style="margin:0 0 10px 0; opacity:0.7;">JOIN</h4>
+            <h4 style="margin:0 0 10px 0; opacity:0.7;" data-i18n="lbl_join_header">JOIN</h4>
             <!-- SCAN QR BUTTON -->
-            <button class="btn-main btn-dark" onclick="window.scanQR()" style="margin-bottom:10px;">📷 Scan QR</button>
-            <div style="font-size:12px; opacity:0.5; margin:5px 0;">OR ENTER CODE</div>
+            <button class="btn-main btn-dark" onclick="window.scanQR()" style="margin-bottom:10px;" data-i18n="btn_scan_qr">📷 Scan QR</button>
+            <div style="font-size:12px; opacity:0.5; margin:5px 0;" data-i18n="lbl_or_code">OR ENTER CODE</div>
             <input type="text" id="join-code" class="input-code" placeholder="12345" maxlength="5">
             <button id="btn-join" class="btn-main btn-blue" style="margin:0;" onclick="window.joinRoom()">
                 <span class="btn-content" data-i18n="btn_join">Join</span>
@@ -392,7 +391,7 @@
         
         <!-- QR Container -->
         <div id="lobby-qr-container"></div>
-        <p style="color:#aaa; font-size:0.9rem;">Scan or share code to join</p>
+        <p style="color:#aaa; font-size:0.9rem;" data-i18n="lbl_share_instr">Scan or share code to join</p>
         
         <div id="player-list"></div>
 
@@ -400,7 +399,7 @@
             <button class="btn-main btn-green" onclick="window.hostStartGame()" data-i18n="btn_start_game">Start Game</button>
         </div>
         
-        <div id="lobby-status" style="margin-top:10px; color:#aaa; font-style:italic;" data-i18n="lbl_waiting">Waiting for players (Max 20)...</div>
+        <div id="lobby-status" style="margin-top:10px; color:#aaa; font-style:italic;" data-i18n="lbl_waiting_max">Waiting for players (Max 20)...</div>
         <button class="btn-main btn-red" style="width:auto; margin-top:20px;" onclick="window.leaveLobby()" data-i18n="btn_leave">Leave</button>
     </div>
 
@@ -411,7 +410,7 @@
         <div style="display:flex; flex-direction:column;">
             <div id="timer-box" class="hidden">02:00</div>
             <div id="host-controls" class="hidden">
-                <button style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px;" onclick="window.hostForceRoundEnd()">End Round</button>
+                <button style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px;" onclick="window.hostForceRoundEnd()" data-i18n="btn_end_round">End Round</button>
             </div>
         </div>
         <div id="score-box">
@@ -443,7 +442,7 @@
         <div id="res-mp-list" style="background:rgba(255,255,255,0.05); padding:10px; border-radius:12px; display:none; max-height:120px; overflow-y:auto;"></div>
 
         <div style="display:flex; gap:10px; margin-top:10px;">
-            <button class="btn-main btn-dark" style="width:60px; margin:0; padding:0;" onclick="window.shareResult()">📤</button>
+            <button class="btn-main btn-dark" style="width:60px; margin:0; padding:0;" onclick="window.shareResult()" data-i18n="btn_share">📤</button>
             <button class="btn-main btn-blue" id="next-btn" style="margin:0;" onclick="window.nextRound()">
                 <span class="btn-content" data-i18n="btn_next">Play Next</span>
                 <div class="btn-spinner"></div>
@@ -480,36 +479,61 @@
         const MLY_TOKEN = 'MLY|26213154491618951|523c0418de2d6a8118aefdab3284d6c2';
 
         const TR = {
-            en: { 
+            en: {
                 app_title: "GeoGuessr", 
-                app_subtitle: "Ultimate World Explorer", /* Added */
-                btn_country: "🌍 Country Mode", 
-                btn_endless: "∞ Endless", 
-                btn_challenge: "⏱️ Challenge", 
-                btn_friend: "👥 Party Mode", 
-                btn_profile: "👤 Profile", 
-                btn_back: "Back", 
-                friend_mode: "Party Mode", 
-                btn_create_play: "Create Room", 
-                btn_join: "Join Room", 
-                lbl_waiting: "Waiting for players...", 
-                btn_leave: "Leave", 
-                btn_start_game: "Start Game", 
-                btn_guess_tap: "Tap map to guess", 
-                btn_next: "Play Next", 
-                lbl_game_over: "Game Over", 
-                btn_menu: "Main Menu", 
-                lbl_location: "Location", 
-                msg_kicked: "You were kicked.",
-                /* Missing keys fixed below */
+                app_subtitle: "Ultimate World Explorer",
+                lbl_loading: "Loading...",
+                lbl_select_country: "Select Country",
+                lbl_host: "HOST",
+                lbl_join_header: "JOIN",
+                lbl_or_code: "OR ENTER CODE",
+                lbl_share_instr: "Scan or share code to join",
+                lbl_waiting_max: "Waiting for players (Max 20)...",
+                lbl_waiting: "Waiting for players...",
                 lbl_me: "YOU",
                 lbl_games: "Rounds",
                 lbl_score: "Total XP",
-                lbl_history: "History"
+                lbl_history: "History",
+                lbl_location: "Location",
+                lbl_game_over: "Game Over",
+                lbl_missed: "Missed",
+
+                btn_endless: "∞ Endless Mode",
+                btn_challenge: "⏱️ Challenge Mode",
+                btn_country: "🌍 Country Mode",
+                btn_friend: "👥 Party Mode",
+                btn_profile: "👤 Profile",
+                btn_back: "Back",
+                mode_endless: "Endless",
+                mode_timed: "Timed",
+                btn_create_play: "Create Room",
+                btn_scan_qr: "📷 Scan QR",
+                btn_join: "Join",
+                btn_start_game: "Start Game",
+                btn_leave: "Leave",
+                btn_end_round: "End Round",
+                btn_guess_tap: "Tap map to guess",
+                btn_confirm: "CONFIRM GUESS",
+                btn_waiting: "WAITING...",
+                btn_next: "Play Next",
+                btn_finish: "Finish",
+                btn_menu: "Main Menu",
+                btn_reset: "🗑️ Reset",
+                btn_share: "📤",
+
+                msg_kicked: "You were kicked.",
+                msg_room_full: "Room is full (Max 20)",
+                msg_room_not_found: "Room not found",
+                msg_room_closed: "Room closed",
+                msg_qr_popup: "Scan Lobby QR",
+                msg_qr_invalid: "Invalid QR Code",
+                msg_qr_mobile_only: "QR Scanner only works in Telegram Mobile.",
+                msg_clear_confirm: "Clear history?",
+                msg_share_text: "Scored {s} pts in GeoGuessr!"
             },
             ru: { 
                 app_title: "ГеоГессср", 
-                app_subtitle: "Дослiджуй свiт", /* Added */
+                app_subtitle: "Дослiджуй свiт", 
                 btn_country: "🌍 По странам", 
                 btn_endless: "∞ Бесконечность", 
                 btn_challenge: "⏱️ На время", 
@@ -528,11 +552,37 @@
                 btn_menu: "В меню", 
                 lbl_location: "Локацiя", 
                 msg_kicked: "Вы iсключены.",
-                /* Missing keys fixed below */
                 lbl_me: "ВЫ",
                 lbl_games: "Раунды",
                 lbl_score: "Всего XP",
-                lbl_history: "История"
+                lbl_history: "Исторiя",
+
+                // Standard Russian for missing elements to ensure functionality
+                lbl_loading: "Загрузка...",
+                lbl_select_country: "Выберите страну",
+                lbl_host: "ХОСТ",
+                lbl_join_header: "ВОЙТИ",
+                lbl_or_code: "ИЛИ ВВЕДИ КОД",
+                lbl_share_instr: "Сканируй или делись кодом",
+                lbl_waiting_max: "Ждем игроков (Макс 20)...",
+                lbl_missed: "Мимо",
+                mode_endless: "Бесконечность",
+                mode_timed: "На время",
+                btn_scan_qr: "📷 Сканировать QR",
+                btn_end_round: "Завершить",
+                btn_confirm: "ПОДТВЕРДИТЬ",
+                btn_waiting: "ОЖИДАНИЕ...",
+                btn_finish: "Финиш",
+                btn_reset: "🗑️ Сброс",
+                btn_share: "📤",
+                msg_room_full: "Комната жырная (Макс 20)",
+                msg_room_not_found: "Комната не найдена",
+                msg_room_closed: "Комната закрыта",
+                msg_qr_popup: "Сканируй QR лобби",
+                msg_qr_invalid: "Неверный QR код",
+                msg_qr_mobile_only: "Сканер работает только в мобильном Telegram.",
+                msg_clear_confirm: "Очистить историю?",
+                msg_share_text: "Я набрал {s} жырчков в ГеоГессср!"
             }
         };
 
@@ -782,8 +832,10 @@
                 if(STATE.isLocked) return;
                 if(guessMarker) map.removeLayer(guessMarker);
                 guessMarker = L.marker(e.latlng).addTo(map);
-                document.getElementById('confirm-btn').classList.add('active');
-                document.getElementById('confirm-btn').disabled = false;
+                const btn = document.getElementById('confirm-btn');
+                btn.classList.add('active');
+                btn.disabled = false;
+                btn.innerText = t('btn_confirm');
                 if(window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.selectionChanged();
             });
 
@@ -881,7 +933,7 @@
 
             const city = pool[Math.floor(Math.random() * pool.length)];
             
-            // Just use the city coordinate directly with slight jitter (simpler and more reliable)
+            // Just use the city coordinate directly with slight jitter
             const rLat = city.lat + (Math.random() * 0.02 - 0.01);
             const rLng = city.lng + (Math.random() * 0.02 - 0.01);
             const bbox = `${rLng-0.005},${rLat-0.005},${rLng+0.005},${rLat+0.005}`;
@@ -913,7 +965,7 @@
                     if(STATE.mode === 'challenge') startTimer(120);
                 });
             } else {
-                document.getElementById('confirm-btn').innerText = "WAITING...";
+                document.getElementById('confirm-btn').innerText = t('btn_waiting');
             }
         }
 
@@ -1007,7 +1059,7 @@
                 if(snap.exists()) {
                     const data = snap.val();
                     if (Object.keys(data.players || {}).length >= 20) {
-                         alert("Room is full (Max 20)"); return;
+                         alert(t('msg_room_full')); return;
                     }
                     STATE.gameId = code;
                     STATE.mpRole = 'guest';
@@ -1017,7 +1069,7 @@
                     });
                     enterLobby(code);
                 } else {
-                    alert("Room not found");
+                    alert(t('msg_room_not_found'));
                 }
             });
         }
@@ -1025,20 +1077,19 @@
         // --- QR CODE SCANNER ---
         window.scanQR = () => {
             if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.showScanQrPopup) {
-                window.Telegram.WebApp.showScanQrPopup({ text: 'Scan Lobby QR' }, (data) => {
-                    // Telegram returns string data. We expect a 5 digit code.
+                window.Telegram.WebApp.showScanQrPopup({ text: t('msg_qr_popup') }, (data) => {
                     if (data && data.length === 5 && !isNaN(data)) {
                         window.Telegram.WebApp.closeScanQrPopup();
                         document.getElementById('join-code').value = data;
                         window.joinRoom();
                     } else {
                         window.Telegram.WebApp.closeScanQrPopup();
-                        alert("Invalid QR Code");
+                        alert(t('msg_qr_invalid'));
                     }
                     return true;
                 });
             } else {
-                alert("QR Scanner only works in Telegram Mobile.");
+                alert(t('msg_qr_mobile_only'));
             }
         };
 
@@ -1069,7 +1120,7 @@
         function listenToLobby(code) {
             onValue(ref(db, 'games/' + code), (snap) => {
                 const data = snap.val();
-                if(!data) { alert("Room closed"); window.location.reload(); return; }
+                if(!data) { alert(t('msg_room_closed')); window.location.reload(); return; }
                 if(!data.players || !data.players[STATE.myUid]) {
                     alert(t('msg_kicked')); window.location.reload(); return;
                 }
@@ -1172,7 +1223,7 @@
             localStorage.setItem('geo_history', JSON.stringify(STATE.history));
 
             if(STATE.mode === 'multi') {
-                document.getElementById('confirm-btn').innerText = "WAITING...";
+                document.getElementById('confirm-btn').innerText = t('btn_waiting');
                 update(ref(db, `games/${STATE.gameId}/guesses/${STATE.myUid}`), {
                     lat: uLat.lat, lng: uLat.lng, pts: pts, name: STATE.myName
                 });
@@ -1191,7 +1242,7 @@
             
             const nextBtn = document.getElementById('next-btn');
             if (STATE.mode === 'challenge' && STATE.round >= STATE.maxRounds) {
-                nextBtn.querySelector('.btn-content').innerText = "Finish";
+                nextBtn.querySelector('.btn-content').innerText = t('btn_finish');
                 nextBtn.onclick = showSummary;
             } else {
                 nextBtn.querySelector('.btn-content').innerText = t('btn_next');
@@ -1216,7 +1267,7 @@
             const pts = myGuess ? myGuess.pts : 0;
             const dist = myGuess ? map.distance(L.latLng(myGuess.lat, myGuess.lng), actual) : 0;
             
-            document.getElementById('res-dist').innerText = myGuess ? formatDist(dist) : "Missed";
+            document.getElementById('res-dist').innerText = myGuess ? formatDist(dist) : t('lbl_missed');
             document.getElementById('res-pts').innerText = "+" + pts + " pts";
             document.getElementById('res-loc-name').innerHTML = STATE.currentLoc.city.name + " " + (STATE.currentLoc.city.flag || "");
 
@@ -1242,7 +1293,7 @@
                  });
             } else {
                  nextBtn.disabled = true;
-                 nextBtn.querySelector('.btn-content').innerText = "WAITING...";
+                 nextBtn.querySelector('.btn-content').innerText = t('btn_waiting');
             }
             document.getElementById('result-sheet').classList.add('show');
         }
@@ -1306,14 +1357,15 @@
         };
         window.closeProfile = () => window.showMainMenu();
         window.clearData = () => {
-            if(confirm("Clear history?")) {
+            if(confirm(t('msg_clear_confirm'))) {
                 localStorage.clear(); location.reload();
             }
         };
 
         function formatDist(m) { return m < 1000 ? Math.round(m) + " m" : (m/1000).toFixed(1) + " km"; }
         window.shareResult = () => {
-            const url = `https://t.me/share/url?url=${encodeURIComponent("t.me/geogur_bot/app")}&text=${encodeURIComponent(`Scored ${STATE.score} pts in GeoGuessr!`)}`;
+            const msg = t('msg_share_text').replace('{s}', STATE.score);
+            const url = `https://t.me/share/url?url=${encodeURIComponent("t.me/geogur_bot/app")}&text=${encodeURIComponent(msg)}`;
             if(window.Telegram?.WebApp) window.Telegram.WebApp.openTelegramLink(url);
             else window.open(url, '_blank');
         };
@@ -1321,4 +1373,3 @@
         init();
     </script>
 </body>
-</html>
