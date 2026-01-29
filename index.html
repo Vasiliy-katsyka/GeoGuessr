@@ -22,333 +22,225 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://unpkg.com/mapillary-js@4.1.0/dist/mapillary.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-    <!-- Lottie Player -->
     <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
+    
+    <!-- QR Code Lib -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
     <style>
-        /* ==================== THEME & VARS ==================== */
+        /* ==================== EXISTING CSS (UNCHANGED) ==================== */
         :root {
             --bg-color: #0f0f12;
             --text-color: #ffffff;
             --primary-grad: linear-gradient(135deg, #00C6FF 0%, #0072FF 100%);
-            
-            /* ENHANCED GLASS VARIABLES */
             --glass-bg: rgba(20, 20, 30, 0.65);
             --glass-border: rgba(255, 255, 255, 0.15);
             --glass-highlight: rgba(255, 255, 255, 0.05);
             --glass-shadow: 0 15px 35px 0 rgba(0, 0, 0, 0.6);
-            --blur: 50px; /* Stronger blur */
+            --blur: 50px;
             --safe-top: 80px; 
         }
 
-        body, html { 
-            margin: 0; padding: 0; height: 100%; 
-            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-            background: var(--bg-color); color: var(--text-color);
-            overflow: hidden; -webkit-tap-highlight-color: transparent;
-        }
-
-        /* ==================== ANIMATED BACKGROUND ==================== */
-        .bg-blob {
-            position: absolute; border-radius: 50%;
-            filter: blur(90px); opacity: 0.5; z-index: 0;
-            animation: floatBlob 12s infinite alternate ease-in-out;
-            pointer-events: none;
-        }
+        body, html { margin: 0; padding: 0; height: 100%; font-family: 'SF Pro Display', sans-serif; background: var(--bg-color); color: var(--text-color); overflow: hidden; -webkit-tap-highlight-color: transparent; }
+        .bg-blob { position: absolute; border-radius: 50%; filter: blur(90px); opacity: 0.5; z-index: 0; animation: floatBlob 12s infinite alternate ease-in-out; pointer-events: none; }
         .blob-1 { top: -10%; left: -10%; width: 300px; height: 300px; background: #00C6FF; }
         .blob-2 { bottom: -10%; right: -10%; width: 350px; height: 350px; background: #764ba2; animation-delay: -5s; }
         .blob-3 { top: 40%; left: 40%; width: 250px; height: 250px; background: #43cea2; animation-duration: 18s; opacity: 0.3; }
-
-        @keyframes floatBlob {
-            0% { transform: translate(0, 0) scale(1); }
-            100% { transform: translate(40px, 60px) scale(1.1); }
-        }
-
-        /* ==================== UTILS & GLASS ==================== */
-        .glass-panel {
-            background: var(--glass-bg);
-            /* Icy gradient overlay */
-            background-image: linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.00) 100%);
-            backdrop-filter: blur(var(--blur)); -webkit-backdrop-filter: blur(var(--blur));
-            border: 1px solid var(--glass-border); 
-            border-top: 1px solid rgba(255,255,255,0.25); /* brighter top border for 3D effect */
-            border-radius: 24px;
-            box-shadow: var(--glass-shadow), inset 0 0 20px rgba(255,255,255,0.02);
-        }
+        @keyframes floatBlob { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(40px, 60px) scale(1.1); } }
+        .glass-panel { background: var(--glass-bg); background-image: linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.00) 100%); backdrop-filter: blur(var(--blur)); -webkit-backdrop-filter: blur(var(--blur)); border: 1px solid var(--glass-border); border-top: 1px solid rgba(255,255,255,0.25); border-radius: 24px; box-shadow: var(--glass-shadow), inset 0 0 20px rgba(255,255,255,0.02); }
         .hidden { display: none !important; }
         .scrollable { overflow-y: auto; -webkit-overflow-scrolling: touch; }
-
-        /* ==================== UI ELEMENTS ==================== */
-        
-        /* Language Toggle */
-        #settings-btn {
-            position: absolute; top: var(--safe-top); right: 20px; z-index: 6000;
-            width: 44px; height: 44px; 
-            background: rgba(30, 30, 40, 0.6);
-            border-radius: 50%; display: flex; justify-content: center; align-items: center;
-            border: 1px solid rgba(255,255,255,0.2); cursor: pointer; font-size: 22px;
-            backdrop-filter: blur(15px); box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-            transition: opacity 0.3s, transform 0.2s;
-        }
+        #settings-btn { position: absolute; top: var(--safe-top); right: 20px; z-index: 6000; width: 44px; height: 44px; background: rgba(30, 30, 40, 0.6); border-radius: 50%; display: flex; justify-content: center; align-items: center; border: 1px solid rgba(255,255,255,0.2); cursor: pointer; font-size: 22px; backdrop-filter: blur(15px); box-shadow: 0 4px 15px rgba(0,0,0,0.4); transition: opacity 0.3s, transform 0.2s; }
         #settings-btn:active { transform: scale(0.9); }
         body.game-active #settings-btn { opacity: 0; pointer-events: none; }
-
-        /* Input Code Styling - FIXED */
-        .input-code {
-            display: block;
-            width: 80%;
-            margin: 20px auto;
-            padding: 18px;
-            font-family: inherit;
-            font-size: 26px;
-            font-weight: 800;
-            text-align: center;
-            letter-spacing: 6px;
-            text-transform: uppercase;
-            color: white;
-            
-            /* Glass Input Style */
-            background: rgba(0, 0, 0, 0.4); 
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 18px;
-            backdrop-filter: blur(10px);
-            box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
-            outline: none;
-            transition: border-color 0.3s, box-shadow 0.3s;
-        }
-        .input-code:focus {
-            border-color: #00C6FF;
-            box-shadow: inset 0 2px 10px rgba(0,0,0,0.5), 0 0 15px rgba(0, 198, 255, 0.3);
-        }
+        .input-code { display: block; width: 80%; margin: 20px auto; padding: 18px; font-family: inherit; font-size: 26px; font-weight: 800; text-align: center; letter-spacing: 6px; text-transform: uppercase; color: white; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 18px; backdrop-filter: blur(10px); box-shadow: inset 0 2px 10px rgba(0,0,0,0.5); outline: none; transition: border-color 0.3s, box-shadow 0.3s; }
+        .input-code:focus { border-color: #00C6FF; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5), 0 0 15px rgba(0, 198, 255, 0.3); }
         .input-code::placeholder { color: rgba(255,255,255,0.3); }
-
-        /* ==================== MENUS ==================== */
-        .full-screen-menu {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 5000;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            padding: 20px; box-sizing: border-box;
-            transition: opacity 0.3s ease;
-        }
-        .menu-overlay {
-            position: absolute; top:0; left:0; width:100%; height:100%;
-            background: rgba(0,0,0,0.3); z-index: -1; backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
-        }
-
-        .menu-title { 
-            font-size: 3.8rem; font-weight: 900; margin-bottom: 5px; margin-top: 10px;
-            background: var(--primary-grad); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-            text-align: center; letter-spacing: -2px; 
-            filter: drop-shadow(0 0 35px rgba(0, 198, 255, 0.5));
-        }
+        .full-screen-menu { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5000; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; transition: opacity 0.3s ease; }
+        .menu-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.3); z-index: -1; backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); }
+        .menu-title { font-size: 3.8rem; font-weight: 900; margin-bottom: 5px; margin-top: 10px; background: var(--primary-grad); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; letter-spacing: -2px; filter: drop-shadow(0 0 35px rgba(0, 198, 255, 0.5)); }
         .menu-subtitle { font-size: 1.1rem; color: #ccc; margin-bottom: 40px; text-align: center; font-weight: 500; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
-
-        /* Buttons */
-        .btn-main {
-            width: 100%; max-width: 320px; padding: 20px; margin: 10px 0;
-            border: none; border-radius: 20px; font-size: 1.15rem; font-weight: 700;
-            cursor: pointer; color: white; text-transform: uppercase; letter-spacing: 1.5px;
-            position: relative; display: flex; align-items: center; justify-content: center; gap: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.4); 
-            border: 1px solid rgba(255,255,255,0.15);
-            backdrop-filter: blur(5px);
-            transition: transform 0.1s, box-shadow 0.2s;
-        }
+        .btn-main { width: 100%; max-width: 320px; padding: 20px; margin: 10px 0; border: none; border-radius: 20px; font-size: 1.15rem; font-weight: 700; cursor: pointer; color: white; text-transform: uppercase; letter-spacing: 1.5px; position: relative; display: flex; align-items: center; justify-content: center; gap: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); backdrop-filter: blur(5px); transition: transform 0.1s, box-shadow 0.2s; }
         .btn-main:active { transform: scale(0.96); box-shadow: 0 5px 15px rgba(0,0,0,0.4); }
         .btn-blue { background: linear-gradient(135deg, rgba(0, 198, 255, 0.9) 0%, rgba(0, 114, 255, 0.9) 100%); }
-        /* Updated Challenge Button (Sunset Orange - No more pink) */
-        .btn-purple { 
-            background: linear-gradient(135deg, #FF512F 0%, #F09819 100%); 
-        }
+        .btn-purple { background: linear-gradient(135deg, #FF512F 0%, #F09819 100%); }
         .btn-green { background: linear-gradient(135deg, rgba(17, 153, 142, 0.9) 0%, rgba(56, 239, 125, 0.9) 100%); }
         .btn-red { background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%); }
         .btn-dark { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); }
-
-        .btn-spinner {
-            width: 24px; height: 24px; border: 3px solid rgba(255,255,255,0.3);
-            border-top: 3px solid white; border-radius: 50%;
-            animation: spin 0.8s linear infinite; display: none;
-        }
+        .btn-spinner { width: 24px; height: 24px; border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid white; border-radius: 50%; animation: spin 0.8s linear infinite; display: none; }
         .btn-main.loading .btn-content { display: none; }
         .btn-main.loading .btn-spinner { display: block; }
-
-        /* ==================== FRIEND MENU ==================== */
         #friend-menu { display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .friend-panel {
-            padding: 30px 25px; width: 100%; max-width: 350px; 
-            margin-bottom: 25px; 
-            display: flex; flex-direction: column; align-items: center;
-        }
-        
-        /* ==================== HUD ==================== */
-        #top-hud {
-            position: absolute; top: var(--safe-top); left: 0; width: 100%;
-            padding: 0 15px; box-sizing: border-box;
-            display: flex; justify-content: space-between; align-items: flex-start;
-            z-index: 100; pointer-events: none;
-        }
-        #timer-box, #host-controls, #score-box {
-            background: var(--glass-bg); 
-            background-image: linear-gradient(145deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.0) 100%);
-            backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
-            border: 1px solid rgba(255,255,255,0.2); 
-            border-radius: 18px;
-            padding: 12px 18px; color: white; margin-bottom: 8px;
-            pointer-events: all; 
-            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
-        }
+        .friend-panel { padding: 30px 25px; width: 100%; max-width: 350px; margin-bottom: 25px; display: flex; flex-direction: column; align-items: center; }
+        #top-hud { position: absolute; top: var(--safe-top); left: 0; width: 100%; padding: 0 15px; box-sizing: border-box; display: flex; justify-content: space-between; align-items: flex-start; z-index: 100; pointer-events: none; }
+        #timer-box, #host-controls, #score-box { background: var(--glass-bg); background-image: linear-gradient(145deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.0) 100%); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); border: 1px solid rgba(255,255,255,0.2); border-radius: 18px; padding: 12px 18px; color: white; margin-bottom: 8px; pointer-events: all; box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
         #timer-box { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; }
         #timer-box.warning { border-color: #ff4b2b; color: #ff4b2b; animation: pulse 1s infinite; }
         #score-box { text-align: right; }
         .score-val { color: #f1c40f; font-size: 1.2rem; font-weight: 800; font-family: monospace; text-shadow: 0 2px 10px rgba(0,0,0,0.5);}
         .mini-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); color:white; padding:6px 12px; border-radius:8px; font-weight:600; cursor:pointer;}
-
-        /* ==================== MAP & RESULTS ==================== */
         #mly { width: 100%; height: 100%; position: absolute; top:0; left:0; z-index: 1; }
-        
-        #mobile-map-toggle {
-            position: absolute; bottom: 35px; right: 20px;
-            width: 70px; height: 70px; border-radius: 50%;
-            background: var(--primary-grad); color: white;
-            font-size: 32px; border: 3px solid rgba(255,255,255,0.3);
-            z-index: 100; display: flex; justify-content: center; align-items: center;
-            box-shadow: 0 15px 40px rgba(0,0,0,0.6);
-            transition: transform 0.2s;
-        }
+        #mobile-map-toggle { position: absolute; bottom: 35px; right: 20px; width: 70px; height: 70px; border-radius: 50%; background: var(--primary-grad); color: white; font-size: 32px; border: 3px solid rgba(255,255,255,0.3); z-index: 100; display: flex; justify-content: center; align-items: center; box-shadow: 0 15px 40px rgba(0,0,0,0.6); transition: transform 0.2s; }
         #mobile-map-toggle:active { transform: scale(0.9); }
-
-        #map-container {
-            position: absolute; bottom: 120px; right: 20px;
-            width: 90vw; max-width: 450px; height: 45vh;
-            background: rgba(30, 30, 40, 0.85); 
-            backdrop-filter: blur(35px); -webkit-backdrop-filter: blur(35px);
-            border: 1px solid rgba(255,255,255,0.25); border-radius: 28px;
-            box-shadow: 0 30px 60px rgba(0,0,0,0.7); z-index: 200;
-            transform: scale(0); opacity: 0; pointer-events: none;
-            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-            display: flex; flex-direction: column; padding: 8px; box-sizing: border-box;
-        }
+        #map-container { position: absolute; bottom: 120px; right: 20px; width: 90vw; max-width: 450px; height: 45vh; background: rgba(30, 30, 40, 0.85); backdrop-filter: blur(35px); -webkit-backdrop-filter: blur(35px); border: 1px solid rgba(255,255,255,0.25); border-radius: 28px; box-shadow: 0 30px 60px rgba(0,0,0,0.7); z-index: 200; transform: scale(0); opacity: 0; pointer-events: none; transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); display: flex; flex-direction: column; padding: 8px; box-sizing: border-box; }
         #map-container.open { transform: scale(1); opacity: 1; pointer-events: all; }
-        #map-container.map-result-mode {
-            bottom: 0 !important; right: 0 !important; width: 100% !important; height: 100% !important;
-            border-radius: 0 !important; background: #1a1a1a; padding: 0; max-width: none; z-index: 10;
-        }
+        #map-container.map-result-mode { bottom: 0 !important; right: 0 !important; width: 100% !important; height: 100% !important; border-radius: 0 !important; background: #1a1a1a; padding: 0; max-width: none; z-index: 10; }
         #map { flex-grow: 1; width: 100%; border-radius: 22px; }
-
-        #confirm-btn {
-            width: 100%; padding: 18px; margin-top: 8px;
-            background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.4);
-            font-weight: 800; border: none; text-transform: uppercase;
-            border-radius: 16px; cursor: not-allowed; transition: 0.3s;
-            letter-spacing: 1px;
-        }
-        #confirm-btn.active { 
-            background: var(--primary-grad); color: white; cursor: pointer; 
-            box-shadow: 0 5px 20px rgba(0, 198, 255, 0.4);
-        }
-
-        /* Result Sheet */
-        #result-sheet {
-            position: absolute; bottom: 0; left: 0; width: 100%;
-            background: rgba(15, 15, 25, 0.95); 
-            backdrop-filter: blur(50px); -webkit-backdrop-filter: blur(50px);
-            border-top: 1px solid rgba(255,255,255,0.2);
-            border-top-left-radius: 35px; border-top-right-radius: 35px;
-            z-index: 3000; transform: translateY(110%); transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
-            padding: 35px 25px 50px 25px; box-sizing: border-box;
-            display: flex; flex-direction: column; gap: 20px; color: white;
-            box-shadow: 0 -15px 60px rgba(0,0,0,0.8);
-        }
+        #confirm-btn { width: 100%; padding: 18px; margin-top: 8px; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.4); font-weight: 800; border: none; text-transform: uppercase; border-radius: 16px; cursor: not-allowed; transition: 0.3s; letter-spacing: 1px; }
+        #confirm-btn.active { background: var(--primary-grad); color: white; cursor: pointer; box-shadow: 0 5px 20px rgba(0, 198, 255, 0.4); }
+        #result-sheet { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(15, 15, 25, 0.95); backdrop-filter: blur(50px); -webkit-backdrop-filter: blur(50px); border-top: 1px solid rgba(255,255,255,0.2); border-top-left-radius: 35px; border-top-right-radius: 35px; z-index: 3000; transform: translateY(110%); transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1); padding: 35px 25px 50px 25px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; color: white; box-shadow: 0 -15px 60px rgba(0,0,0,0.8); }
         #result-sheet.show { transform: translateY(0); }
-
         .result-row { display: flex; justify-content: space-between; align-items: flex-end; }
         .big-text { font-size: 2.5rem; font-weight: 900; line-height: 1; margin-bottom: 5px; text-shadow: 0 5px 15px rgba(0,0,0,0.5);}
         .sub-text { color: #aaa; font-size: 1.1rem; }
-        
         .btn-group { display: flex; gap: 15px; margin-top: 10px; }
-        .btn-primary {
-            background: var(--primary-grad); color: white; padding: 20px;
-            border: none; border-radius: 18px; font-size: 1.1rem; font-weight: 800; flex: 1;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.3); cursor: pointer;
-            display: flex; justify-content: center; align-items: center;
-            text-transform: uppercase; letter-spacing: 1px;
-        }
-        .btn-secondary {
-            background: rgba(255,255,255,0.1); color: white; padding: 16px;
-            border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; 
-            font-size: 24px; width: 75px; cursor: pointer;
-        }
-
-        /* ==================== OTHERS ==================== */
+        .btn-primary { background: var(--primary-grad); color: white; padding: 20px; border: none; border-radius: 18px; font-size: 1.1rem; font-weight: 800; flex: 1; box-shadow: 0 8px 20px rgba(0,0,0,0.3); cursor: pointer; display: flex; justify-content: center; align-items: center; text-transform: uppercase; letter-spacing: 1px; }
+        .btn-secondary { background: rgba(255,255,255,0.1); color: white; padding: 16px; border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; font-size: 24px; width: 75px; cursor: pointer; }
         .toggle-group { display: flex; gap: 10px; width: 100%; margin-bottom: 20px; }
-        .toggle-btn {
-            flex: 1; padding: 18px; border-radius: 16px; 
-            border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); 
-            color: #aaa; font-weight: 700; cursor: pointer; transition: 0.3s;
-            text-transform: uppercase; letter-spacing: 1px; font-size: 0.9rem;
-        }
-        .toggle-btn.selected { 
-            background: var(--primary-grad); color: white; border-color: transparent; 
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-        }
-        
+        .toggle-btn { flex: 1; padding: 18px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #aaa; font-weight: 700; cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; font-size: 0.9rem; }
+        .toggle-btn.selected { background: var(--primary-grad); color: white; border-color: transparent; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
         #player-list { width: 100%; max-width: 350px; max-height: 200px; margin: 20px 0; overflow-y: auto; }
-        .player-item {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 14px; background: rgba(255,255,255,0.08); margin-bottom: 8px; border-radius: 14px;
-            border: 1px solid rgba(255,255,255,0.05);
-        }
-        
+        .player-item { display: flex; justify-content: space-between; align-items: center; padding: 14px; background: rgba(255,255,255,0.08); margin-bottom: 8px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.05); }
         #profile-screen { background: rgba(10, 10, 15, 0.95); z-index: 6000; }
         .profile-header { display: flex; flex-direction: column; align-items: center; margin-bottom: 30px; }
-        .big-avatar {
-            width: 90px; height: 90px; border-radius: 50%; background: var(--primary-grad);
-            display: flex; justify-content: center; align-items: center; font-size: 40px;
-            margin-bottom: 15px; box-shadow: 0 0 30px rgba(0,198,255,0.5); border: 2px solid white;
-        }
+        .big-avatar { width: 90px; height: 90px; border-radius: 50%; background: var(--primary-grad); display: flex; justify-content: center; align-items: center; font-size: 40px; margin-bottom: 15px; box-shadow: 0 0 30px rgba(0,198,255,0.5); border: 2px solid white; }
         .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; width: 100%; max-width: 350px; margin-bottom: 30px; }
         .stat-card { background: rgba(255,255,255,0.06); padding: 20px; border-radius: 20px; text-align: center; border: 1px solid rgba(255,255,255,0.05); }
-        .history-item { 
-            background: rgba(255,255,255,0.04); padding: 14px; border-radius: 14px; 
-            margin-bottom: 10px; display: flex; justify-content: space-between; 
-            border: 1px solid rgba(255,255,255,0.03);
-        }
-
-        /* LOADING SCREEN */
-        #loading {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: #0f0f12; z-index: 8000;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-        }
-        /* Spacing for Lottie */
-        #loading lottie-player {
-            margin-bottom: 30px; /* Added spacing */
-        }
+        .history-item { background: rgba(255,255,255,0.04); padding: 14px; border-radius: 14px; margin-bottom: 10px; display: flex; justify-content: space-between; border: 1px solid rgba(255,255,255,0.03); }
+        #loading { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0f0f12; z-index: 8000; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        #loading lottie-player { margin-bottom: 30px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-
-        .scrollable { overflow-y: auto; -webkit-overflow-scrolling: touch; }
-
-        /* Fixed History List - Scrollable & Compact */
-        #history-list { 
-            width: 100%; 
-            padding: 0 10px; 
-            box-sizing: border-box;
-            
-            /* Logic to show approx 3 items then scroll */
-            max-height: 140px; 
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
-            
-            /* Visual polish */
-            margin: 10px 0;
-            border-top: 1px solid rgba(255,255,255,0.05);
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-            
-            /* Hide scrollbar for clean look (optional) */
-            scrollbar-width: none; 
-        }
+        #history-list { width: 100%; padding: 0 10px; box-sizing: border-box; max-height: 140px; overflow-y: auto; -webkit-overflow-scrolling: touch; margin: 10px 0; border-top: 1px solid rgba(255,255,255,0.05); border-bottom: 1px solid rgba(255,255,255,0.05); scrollbar-width: none; }
         #history-list::-webkit-scrollbar { display: none; }
+        
+        /* ==================== NEW CSS (UPDATES) ==================== */
+
+        /* 1. Country Grid */
+        .country-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            width: 100%;
+            max-width: 350px;
+            margin: 20px 0;
+            padding-bottom: 40px;
+        }
+        .country-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 18px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .country-card:active { transform: scale(0.95); background: rgba(255, 255, 255, 0.1); }
+        .country-flag { font-size: 40px; margin-bottom: 8px; }
+        .country-name { font-size: 14px; font-weight: 700; color: #ddd; text-align: center; }
+
+        /* 2. QR Code Styles */
+        #qr-container {
+            background: white;
+            padding: 15px;
+            border-radius: 18px;
+            margin: 10px 0 20px 0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        #qr-scanner-btn {
+            background: transparent;
+            border: 1px dashed rgba(255,255,255,0.4);
+            color: rgba(255,255,255,0.8);
+            padding: 15px;
+            width: 100%;
+            border-radius: 18px;
+            margin-top: 10px;
+            cursor: pointer;
+        }
+
+        /* 3. Casino / Bot Mode UI */
+        .bet-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        .bet-btn {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 14px;
+            padding: 15px;
+            text-align: center;
+            color: #aaa;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .bet-btn.selected {
+            background: var(--primary-grad);
+            color: white;
+            border-color: transparent;
+            transform: scale(1.02);
+            box-shadow: 0 5px 15px rgba(0,198,255,0.3);
+        }
+        .bet-btn .odds { font-size: 24px; font-weight: 900; margin-bottom: 5px; display: block; }
+        .bet-btn .desc { font-size: 12px; font-weight: 600; text-transform: uppercase; }
+
+        /* Bot Animation Elements */
+        .bot-cursor {
+            position: fixed;
+            width: 32px;
+            height: 32px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white' stroke='black' stroke-width='1'%3E%3Cpath d='M5.5 3.5l12 11.5l-6 1l4 5.5l-2.5 1.5l-4-5.5l-2.5 4z'/%3E%3C/svg%3E");
+            background-size: contain;
+            background-repeat: no-repeat;
+            z-index: 9999;
+            pointer-events: none;
+            transition: top 1.5s cubic-bezier(0.45, 0, 0.55, 1), left 1.5s cubic-bezier(0.45, 0, 0.55, 1);
+            filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.5));
+            display: none;
+        }
+        
+        .bot-bubble {
+            position: absolute;
+            top: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            color: black;
+            padding: 15px 25px;
+            border-radius: 30px;
+            font-weight: 800;
+            font-size: 14px;
+            z-index: 500;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+            pointer-events: none;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            max-width: 80%;
+            text-align: center;
+        }
+        .bot-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            margin-left: -8px;
+            border-width: 8px 8px 0;
+            border-style: solid;
+            border-color: white transparent transparent transparent;
+        }
+        .bot-bubble.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        /* Casino Mode Overrides */
+        body.casino-mode #map-container { pointer-events: none; }
+        body.casino-mode #confirm-btn { display: none; }
+        body.casino-mode #mobile-map-toggle { display: none; }
+        body.casino-mode .bot-cursor { display: block; }
+
     </style>
 </head>
 <body>
@@ -373,6 +265,10 @@
         <h3 id="load-text" style="color: #666; font-weight:400; letter-spacing:1px; margin-top:-10px;">Loading...</h3>
     </div>
 
+    <!-- BOT ANIMATION ELEMENTS -->
+    <div id="bot-cursor" class="bot-cursor"></div>
+    <div id="bot-bubble" class="bot-bubble">I think I saw a bear...</div>
+
     <!-- MAIN MENU -->
     <div id="main-menu" class="full-screen-menu hidden">
         <div class="menu-overlay"></div>
@@ -391,17 +287,71 @@
             <span class="btn-content" data-i18n="btn_endless">∞ Endless Mode</span>
             <div class="btn-spinner"></div>
         </button>
-        <button class="btn-main btn-purple" onclick="window.startChallenge()">
-            <span class="btn-content" data-i18n="btn_challenge">⏱️ Challenge Mode</span>
-            <div class="btn-spinner"></div>
+        <button class="btn-main btn-purple" onclick="window.openCountryMenu()">
+            <span class="btn-content" data-i18n="btn_countries">🏳️ Country Mode</span>
         </button>
         <button class="btn-main btn-green" onclick="window.openFriendMenu()">
             <span class="btn-content" data-i18n="btn_friend">👥 Party Mode</span>
             <div class="btn-spinner"></div>
         </button>
+        <button class="btn-main btn-red" onclick="window.openCasinoMenu()">
+            <span class="btn-content" data-i18n="btn_casino">🎰 Bot Casino</span>
+        </button>
         <button class="btn-main btn-dark" onclick="window.openProfile()">
             <span class="btn-content" data-i18n="btn_profile">👤 My Profile</span>
         </button>
+    </div>
+
+    <!-- COUNTRY SELECT MENU -->
+    <div id="country-menu" class="full-screen-menu hidden scrollable">
+        <div class="menu-overlay"></div>
+        <h2 style="margin-bottom: 10px;" data-i18n="title_country">Select Country</h2>
+        <p style="color:#aaa; text-align:center; font-size:0.9rem;" data-i18n="sub_country">10 Locations each</p>
+        
+        <div class="country-grid" id="country-grid">
+            <!-- JS will populate -->
+        </div>
+
+        <button class="btn-main btn-dark" style="position:fixed; bottom:20px; max-width:200px;" onclick="window.showMainMenu()" data-i18n="btn_back">Back</button>
+    </div>
+
+    <!-- CASINO / BOT BETTING MENU -->
+    <div id="casino-menu" class="full-screen-menu hidden">
+        <div class="menu-overlay"></div>
+        <h2 style="margin-bottom: 5px;" data-i18n="title_casino">Bot Watcher</h2>
+        <p style="color:#aaa; text-align:center; font-size:0.9rem; margin-bottom:20px;" data-i18n="sub_casino">Bet XP on Auto-Boris</p>
+
+        <div class="glass-panel" style="padding: 20px; width: 100%; max-width: 340px; text-align:center;">
+            <div style="font-size: 1.2rem; color: #f1c40f; font-weight:800; margin-bottom:15px;">
+                <span data-i18n="lbl_wallet">Wallet:</span> <span id="casino-wallet">0</span> XP
+            </div>
+
+            <div class="bet-grid">
+                <div class="bet-btn" onclick="window.selectBet('god')" id="bet-god">
+                    <span class="odds">15x</span>
+                    <span class="desc" data-i18n="bet_god">God Mode (<10km)</span>
+                </div>
+                <div class="bet-btn" onclick="window.selectBet('solid')" id="bet-solid">
+                    <span class="odds">3x</span>
+                    <span class="desc" data-i18n="bet_solid">Solid (<500km)</span>
+                </div>
+                <div class="bet-btn" onclick="window.selectBet('drunk')" id="bet-drunk">
+                    <span class="odds">2x</span>
+                    <span class="desc" data-i18n="bet_drunk">Drunk (>2000km)</span>
+                </div>
+                <div class="bet-btn" onclick="window.selectBet('ocean')" id="bet-ocean">
+                    <span class="odds">10x</span>
+                    <span class="desc" data-i18n="bet_ocean">Ocean Splash</span>
+                </div>
+            </div>
+
+            <input type="number" id="bet-amount" class="input-code" style="font-size:20px; padding:12px; margin: 10px 0;" placeholder="Bet Amount (XP)" value="100">
+
+            <button class="btn-main btn-purple" style="width:100%; margin-top:10px;" onclick="window.startBotRound()">
+                <span data-i18n="btn_watch">Watch Bot Play</span>
+            </button>
+        </div>
+        <button class="btn-main btn-dark" style="margin-top: 20px;" onclick="window.showMainMenu()" data-i18n="btn_back">Back</button>
     </div>
 
     <!-- PROFILE SCREEN -->
@@ -412,7 +362,6 @@
             <h2 id="pf-name">User</h2>
             <div style="color: #aaa;" data-i18n="pf_rank">Novice Explorer</div>
         </div>
-
         <div class="stat-grid">
             <div class="stat-card">
                 <div class="stat-val" id="pf-total-games">0</div>
@@ -423,12 +372,9 @@
                 <div class="stat-label" data-i18n="lbl_score">Total XP</div>
             </div>
         </div>
-
         <h3 style="align-self: flex-start; margin-left: 20px;" data-i18n="lbl_history">History</h3>
         <div id="history-list" class="history-list"></div>
-
         <button class="btn-main btn-dark" style="margin-top: 30px;" onclick="window.closeProfile()" data-i18n="btn_back">Back</button>
-        <!-- CLEAR DATA BUTTON -->
         <button class="btn-main btn-red" style="margin-top: 10px; opacity:0.8; transform:scale(0.9);" onclick="window.clearData()">🗑️ Clear Data</button>
     </div>
 
@@ -454,7 +400,10 @@
         <div class="glass-panel friend-panel" style="text-align:center;">
             <h4 style="margin:0 0 15px 0; color:#ccc; font-size:0.8rem; text-transform:uppercase;" data-i18n="lbl_join">Join Room</h4>
             <input type="text" id="join-code" class="input-code" placeholder="CODE" maxlength="5">
-            <button id="btn-join" class="btn-main btn-blue" style="width:100%; margin:0;" onclick="window.joinRoom()">
+            
+            <button id="qr-scanner-btn" onclick="window.scanQrJoin()">📷 Scan QR Code</button>
+
+            <button id="btn-join" class="btn-main btn-blue" style="width:100%; margin-top:15px;" onclick="window.joinRoom()">
                 <span class="btn-content" data-i18n="btn_join">Join Room</span>
                 <div class="btn-spinner"></div>
             </button>
@@ -465,6 +414,8 @@
     <!-- LOBBY -->
     <div id="lobby-screen" class="full-screen-menu hidden">
         <div class="menu-overlay"></div>
+        
+        <div id="qr-container"></div>
         <h1 id="lobby-code-display" style="font-size:3.5rem; background: var(--primary-grad); -webkit-background-clip:text; -webkit-text-fill-color:transparent; letter-spacing:5px; margin:0;">----</h1>
         <p style="color:#ccc;" data-i18n="lbl_share_code">Share code with friends</p>
         
@@ -559,34 +510,39 @@
         const TR = {
             en: {
                 app_title: "GeoGuessr", app_subtitle: "Explore the world & challenge friends",
-                btn_endless: "∞ Endless Mode", btn_challenge: "⏱️ Challenge Mode", btn_friend: "👥 Party Mode", btn_profile: "👤 My Profile",
-                btn_back: "Back", friend_mode: "Party Mode", lbl_create: "Create Room", lbl_join: "Join Room",
+                btn_endless: "∞ Endless Mode", btn_countries: "🏳️ Country Mode", btn_challenge: "⏱️ Challenge Mode", btn_friend: "👥 Party Mode", btn_profile: "👤 My Profile",
+                btn_casino: "🎰 Bot Casino", btn_back: "Back", friend_mode: "Party Mode", lbl_create: "Create Room", lbl_join: "Join Room",
                 mode_endless: "Endless", mode_challenge: "Challenge", btn_create_play: "Create & Play", btn_join: "Join Room",
                 lbl_share_code: "Share code with friends", lbl_waiting: "Waiting for players...", btn_leave: "Leave", btn_start_game: "Start Game",
                 lbl_me: "YOU", btn_force_end: "End Round", btn_guess_tap: "Tap map to guess", btn_guess_confirm: "CONFIRM GUESS", btn_wait: "WAITING...",
                 lbl_location: "Location", btn_next: "Play Next", btn_finish: "Finish Game", lbl_game_over: "Game Over", btn_menu: "Main Menu",
                 pf_rank: "Explorer", lbl_games: "Rounds", lbl_score: "Total XP", lbl_history: "History",
-                msg_kicked: "You were kicked from the room."
+                msg_kicked: "You were kicked from the room.", title_country: "Select Country", sub_country: "10 Locations each",
+                title_casino: "Bot Watcher", sub_casino: "Bet XP on Auto-Boris", lbl_wallet: "Wallet:", 
+                bet_god: "God Mode (<10km)", bet_solid: "Solid (<500km)", bet_drunk: "Drunk (>2000km)", bet_ocean: "Ocean Splash",
+                btn_watch: "Watch Bot Play"
             },
             ru: {
                 app_title: "ГеоГессср", app_subtitle: "Исследуй мир и играй с друзьями",
-                btn_endless: "∞ Бесконечный", btn_challenge: "⏱️ На время", btn_friend: "👥 Групповой", btn_profile: "👤 Профиль",
-                btn_back: "Назад", friend_mode: "Игра с друзьями", lbl_create: "Создать комнату", lbl_join: "Войти по коду",
+                btn_endless: "∞ Бесконечный", btn_countries: "🏳️ Страны", btn_challenge: "⏱️ На время", btn_friend: "👥 Групповой", btn_profile: "👤 Профиль",
+                btn_casino: "🎰 Бот Казино", btn_back: "Назад", friend_mode: "Игра с друзьями", lbl_create: "Создать комнату", lbl_join: "Войти по коду",
                 mode_endless: "Бесконечно", mode_challenge: "Челлендж", btn_create_play: "Создать", btn_join: "Войти",
                 lbl_share_code: "Отправь код друзьям", lbl_waiting: "Ждем игроков...", btn_leave: "Выйти", btn_start_game: "Начать игру",
                 lbl_me: "ВЫ", btn_force_end: "Завершить", btn_guess_tap: "Нажми на карту", btn_guess_confirm: "ПОДТВЕРДИТЬ", btn_wait: "ОЖИДАНИЕ...",
                 lbl_location: "Локация", btn_next: "Дальше", btn_finish: "Финиш", lbl_game_over: "Конец игры", btn_menu: "В меню",
                 pf_rank: "Исследователь", lbl_games: "Раунды", lbl_score: "Всего XP", lbl_history: "История",
-                msg_kicked: "Вы были исключены из комнаты."
+                msg_kicked: "Вы были исключены из комнаты.", title_country: "Выбор страны", sub_country: "10 локаций",
+                title_casino: "Бот-Зритель", sub_casino: "Ставь XP на Авто-Бориса", lbl_wallet: "Баланс:", 
+                bet_god: "Бог (<10км)", bet_solid: "Сойдет (<500км)", bet_drunk: "Пьян (>2000км)", bet_ocean: "Океан",
+                btn_watch: "Смотреть игру"
             }
         };
 
-        // GLOBAL STATE
         const USER = (window.Telegram?.WebApp?.initDataUnsafe?.user) || { id: 'test_'+Math.floor(Math.random()*1000), first_name: 'Guest', language_code: 'en' };
         
         const STATE = {
             lang: localStorage.getItem('geo_lang') || (USER.language_code === 'ru' ? 'ru' : 'en'),
-            mode: 'menu',
+            mode: 'menu', // endless, challenge, multi, country, casino
             mpRole: null, 
             gameId: null,
             myUid: USER.id.toString(),
@@ -602,10 +558,15 @@
             players: {}, 
             history: JSON.parse(localStorage.getItem('geo_history') || '[]'),
             totalGames: parseInt(localStorage.getItem('geo_total_games') || '0'),
-            totalScore: parseInt(localStorage.getItem('geo_total_score') || '0')
+            totalScore: parseInt(localStorage.getItem('geo_total_score') || '0'),
+            
+            // New States
+            countryFilter: null,
+            betAmount: 100,
+            betOption: null,
+            botInterval: null
         };
 
-        // --- PASTE YOUR LOCATIONS HERE (KEEP EXISTING) ---
         const LOCATIONS = [
             // --- RUSSIA (Existing + 8 New) ---
             { name: "Saint Petersburg, Russia", flag: "🇷🇺", lat: 59.9311, lng: 30.3609 },
@@ -773,6 +734,68 @@
             { name: "Christchurch, New Zealand", flag: "🇳🇿", lat: -43.5321, lng: 172.6362 }
         ];
 
+        // --- NEW: COUNTRY SPECIFIC LISTS ---
+        const COUNTRY_LOCATIONS = {
+            ru: [ // Russia
+                { lat: 59.9311, lng: 30.3609 }, { lat: 55.7558, lng: 37.6173 }, { lat: 55.7963, lng: 49.1088 }, 
+                { lat: 43.5852, lng: 39.7231 }, { lat: 55.0302, lng: 82.9204 }, { lat: 56.8389, lng: 60.6057 },
+                { lat: 43.1198, lng: 131.8869 }, { lat: 56.2965, lng: 43.9361 }, { lat: 54.7104, lng: 20.4522 }, { lat: 51.5336, lng: 46.0343 }
+            ],
+            ee: [ // Estonia (Requested)
+                { lat: 59.4370, lng: 24.7536 }, { lat: 58.3780, lng: 26.7290 }, { lat: 59.3797, lng: 28.1791 },
+                { lat: 58.2481, lng: 22.5038 }, { lat: 59.3591, lng: 24.5807 }, { lat: 58.8879, lng: 25.5682 },
+                { lat: 57.7765, lng: 26.0312 }, { lat: 59.1042, lng: 26.3314 }, { lat: 58.9482, lng: 23.5392 }, { lat: 58.6477, lng: 23.1537 }
+            ],
+            us: [ // USA
+                { lat: 40.7128, lng: -74.0060 }, { lat: 34.0522, lng: -118.2437 }, { lat: 41.8781, lng: -87.6298 },
+                { lat: 37.7749, lng: -122.4194 }, { lat: 25.7617, lng: -80.1918 }, { lat: 36.1699, lng: -115.1398 },
+                { lat: 47.6062, lng: -122.3321 }, { lat: 42.3601, lng: -71.0589 }, { lat: 30.2672, lng: -97.7431 }, { lat: 39.7392, lng: -104.9903 }
+            ],
+            fr: [ // France
+                { lat: 48.8566, lng: 2.3522 }, { lat: 45.7640, lng: 4.8357 }, { lat: 43.2965, lng: 5.3698 },
+                { lat: 43.7102, lng: 7.2620 }, { lat: 44.8378, lng: -0.5792 }, { lat: 48.5734, lng: 7.7521 },
+                { lat: 43.6047, lng: 1.4442 }, { lat: 47.2184, lng: -1.5536 }, { lat: 50.6292, lng: 3.0573 }, { lat: 46.1603, lng: -1.1511 }
+            ],
+            jp: [ // Japan
+                { lat: 35.6762, lng: 139.6503 }, { lat: 34.6937, lng: 135.5023 }, { lat: 35.0116, lng: 135.7681 },
+                { lat: 43.0618, lng: 141.3545 }, { lat: 33.5902, lng: 130.4017 }, { lat: 35.4437, lng: 139.6380 },
+                { lat: 38.2682, lng: 140.8694 }, { lat: 34.3853, lng: 132.4553 }, { lat: 26.2124, lng: 127.6809 }, { lat: 36.5613, lng: 136.6562 }
+            ],
+            br: [ // Brazil
+                { lat: -23.5505, lng: -46.6333 }, { lat: -22.9068, lng: -43.1729 }, { lat: -15.7975, lng: -47.8919 },
+                { lat: -12.9777, lng: -38.5016 }, { lat: -30.0346, lng: -51.2177 }, { lat: -3.7319, lng: -38.5267 },
+                { lat: -19.9167, lng: -43.9345 }, { lat: -1.4558, lng: -48.4902 }, { lat: -8.0476, lng: -34.8770 }, { lat: -25.4284, lng: -49.2733 }
+            ],
+            it: [ // Italy
+                { lat: 41.9028, lng: 12.4964 }, { lat: 45.4642, lng: 9.1900 }, { lat: 45.4408, lng: 12.3155 },
+                { lat: 43.7696, lng: 11.2558 }, { lat: 40.8518, lng: 14.2681 }, { lat: 45.0703, lng: 7.6869 },
+                { lat: 38.1157, lng: 13.3615 }, { lat: 44.4949, lng: 11.3426 }, { lat: 45.4384, lng: 10.9916 }, { lat: 41.1171, lng: 16.8719 }
+            ],
+            gb: [ // UK
+                { lat: 51.5074, lng: -0.1278 }, { lat: 53.4808, lng: -2.2426 }, { lat: 55.9533, lng: -3.1883 },
+                { lat: 52.4862, lng: -1.8904 }, { lat: 53.4084, lng: -2.9916 }, { lat: 51.4545, lng: -2.5879 },
+                { lat: 54.9783, lng: -1.6178 }, { lat: 53.8008, lng: -1.5491 }, { lat: 55.8642, lng: -4.2518 }, { lat: 51.4816, lng: -3.1791 }
+            ],
+            de: [ // Germany
+                { lat: 52.5200, lng: 13.4050 }, { lat: 48.1351, lng: 11.5820 }, { lat: 53.5511, lng: 9.9937 },
+                { lat: 50.1109, lng: 8.6821 }, { lat: 50.9375, lng: 6.9603 }, { lat: 48.7758, lng: 9.1829 },
+                { lat: 51.2277, lng: 6.7735 }, { lat: 51.3397, lng: 12.3731 }, { lat: 51.0504, lng: 13.7373 }, { lat: 53.0793, lng: 8.8017 }
+            ],
+            tr: [ // Turkey
+                { lat: 41.0082, lng: 28.9784 }, { lat: 39.9334, lng: 32.8597 }, { lat: 36.8969, lng: 30.7133 },
+                { lat: 38.4237, lng: 27.1428 }, { lat: 37.0000, lng: 35.3213 }, { lat: 40.1885, lng: 29.0610 },
+                { lat: 37.0662, lng: 37.3833 }, { lat: 38.7578, lng: 30.5387 }, { lat: 40.9168, lng: 39.5855 }, { lat: 36.5866, lng: 36.1666 }
+            ]
+        };
+
+        const COUNTRY_META = [
+            { id: 'ru', flag: '🇷🇺', name: 'Russia' }, { id: 'ee', flag: '🇪🇪', name: 'Estonia' },
+            { id: 'us', flag: '🇺🇸', name: 'USA' }, { id: 'fr', flag: '🇫🇷', name: 'France' },
+            { id: 'jp', flag: '🇯🇵', name: 'Japan' }, { id: 'br', flag: '🇧🇷', name: 'Brazil' },
+            { id: 'it', flag: '🇮🇹', name: 'Italy' }, { id: 'gb', flag: '🇬🇧', name: 'UK' },
+            { id: 'de', flag: '🇩🇪', name: 'Germany' }, { id: 'tr', flag: '🇹🇷', name: 'Turkey' }
+        ];
+
         let map, mly, guessMarker, resultLine, resultMarker, oppMarkers = [];
 
         function init() {
@@ -783,7 +806,7 @@
             mly = new Viewer({ accessToken: MLY_TOKEN, container: 'mly', component: { cover: false, sequence: false } });
 
             map.on('click', (e) => {
-                if(STATE.isLocked) return;
+                if(STATE.isLocked || STATE.mode === 'casino') return;
                 if(guessMarker) map.removeLayer(guessMarker);
                 guessMarker = L.marker(e.latlng).addTo(map);
                 
@@ -795,6 +818,7 @@
             });
 
             applyTranslations();
+            renderCountryGrid();
             document.getElementById('loading').classList.add('hidden');
             document.getElementById('main-menu').classList.remove('hidden');
         }
@@ -815,9 +839,14 @@
         };
 
         window.showMainMenu = () => {
-            document.body.classList.remove('game-active');
+            document.body.classList.remove('game-active', 'casino-mode');
             document.querySelectorAll('.full-screen-menu').forEach(el => el.classList.add('hidden'));
             document.getElementById('main-menu').classList.remove('hidden');
+            // Clean up QR if exists
+            document.getElementById('qr-container').innerHTML = '';
+            // Stop bot if running
+            if(STATE.botInterval) { clearInterval(STATE.botInterval); STATE.botInterval = null; }
+            document.getElementById('bot-cursor').style.display = 'none';
         };
 
         window.openFriendMenu = () => {
@@ -835,7 +864,6 @@
         window.openProfile = () => {
             document.getElementById('main-menu').classList.add('hidden');
             document.getElementById('profile-screen').classList.remove('hidden');
-            
             document.getElementById('pf-name').innerText = STATE.myName;
             document.getElementById('pf-total-games').innerText = STATE.totalGames;
             document.getElementById('pf-total-score').innerText = STATE.totalScore;
@@ -849,30 +877,192 @@
                 list.appendChild(div);
             });
         };
-
         window.closeProfile = () => window.showMainMenu();
-
         window.clearData = () => {
-            if(!confirm('Are you sure you want to delete all history?')) return;
+            if(!confirm('Delete history?')) return;
             localStorage.removeItem('geo_history');
             localStorage.removeItem('geo_total_games');
             localStorage.removeItem('geo_total_score');
-            
-            STATE.history = [];
-            STATE.totalGames = 0;
-            STATE.totalScore = 0;
-            
-            window.openProfile(); // Refresh UI
+            STATE.history = []; STATE.totalGames = 0; STATE.totalScore = 0;
+            window.openProfile();
         };
+
+        // --- NEW: COUNTRY MODE ---
+        function renderCountryGrid() {
+            const grid = document.getElementById('country-grid');
+            grid.innerHTML = '';
+            COUNTRY_META.forEach(c => {
+                const div = document.createElement('div');
+                div.className = 'country-card';
+                div.innerHTML = `<div class="country-flag">${c.flag}</div><div class="country-name">${c.name}</div>`;
+                div.onclick = () => window.startCountryMode(c.id);
+                grid.appendChild(div);
+            });
+        }
+        
+        window.openCountryMenu = () => {
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('country-menu').classList.remove('hidden');
+        };
+
+        window.startCountryMode = (code) => {
+            STATE.countryFilter = code;
+            STATE.mode = 'endless'; // Keep it simple for now, can be changed to challenge later
+            document.body.classList.add('game-active');
+            updateHUD();
+            startGameLoop();
+        };
+
+        // --- NEW: CASINO / BOT MODE ---
+        window.openCasinoMenu = () => {
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('casino-menu').classList.remove('hidden');
+            document.getElementById('casino-wallet').innerText = STATE.totalScore;
+            STATE.betOption = null;
+            document.querySelectorAll('.bet-btn').forEach(b => b.classList.remove('selected'));
+        };
+
+        window.selectBet = (opt) => {
+            STATE.betOption = opt;
+            document.querySelectorAll('.bet-btn').forEach(b => b.classList.remove('selected'));
+            document.getElementById('bet-'+opt).classList.add('selected');
+        };
+
+        window.startBotRound = () => {
+            const amount = parseInt(document.getElementById('bet-amount').value);
+            if(!STATE.betOption) { alert("Select a bet option!"); return; }
+            if(amount > STATE.totalScore) { alert("Not enough XP!"); return; }
+            if(amount <= 0) { alert("Invalid bet!"); return; }
+
+            STATE.betAmount = amount;
+            STATE.totalScore -= amount; // Deduct immediately (House rules!)
+            localStorage.setItem('geo_total_score', STATE.totalScore.toString());
+
+            document.getElementById('casino-menu').classList.add('hidden');
+            document.body.classList.add('game-active', 'casino-mode');
+            STATE.mode = 'casino';
+            STATE.countryFilter = null;
+            
+            startGameLoop();
+            
+            // Bot Logic
+            setTimeout(() => runBotSequence(), 3000);
+        };
+
+        async function runBotSequence() {
+            // 1. Determine Outcome RNG
+            const rng = Math.random() * 100;
+            let outcome = 'fail'; 
+            // 15% God (<10km), 35% Solid (<500km), 30% Drunk (>2000km), 20% Ocean
+            if(rng < 15) outcome = 'god';
+            else if(rng < 50) outcome = 'solid';
+            else if(rng < 80) outcome = 'drunk';
+            else outcome = 'ocean';
+
+            const actualLat = STATE.currentLoc.lat;
+            const actualLng = STATE.currentLoc.lng;
+
+            let targetLat, targetLng;
+
+            if(outcome === 'god') {
+                targetLat = actualLat + (Math.random()*0.1 - 0.05);
+                targetLng = actualLng + (Math.random()*0.1 - 0.05);
+            } else if(outcome === 'solid') {
+                targetLat = actualLat + (Math.random()*4 - 2);
+                targetLng = actualLng + (Math.random()*4 - 2);
+            } else if(outcome === 'drunk') {
+                // Random point far away
+                targetLat = actualLat > 0 ? -20 : 50; 
+                targetLng = actualLng + 90;
+            } else {
+                // Ocean (Null Island area usually safe bet for ocean, or specific Pacific point)
+                targetLat = 0; targetLng = -160; 
+            }
+
+            // 2. Animation
+            const bubbles = ["Hmmm...", "Calculating sun angle...", "Looks like Brazil...", "Wait, is that a cat?", "Scanning pixels...", "My WiFi is slow..."];
+            const bubbleEl = document.getElementById('bot-bubble');
+            const cursorEl = document.getElementById('bot-cursor');
+
+            let bearing = 0;
+            STATE.botInterval = setInterval(() => {
+                bearing = (bearing + 1) % 360;
+                mly.setBearing(bearing); // Pan camera
+                
+                if(Math.random() > 0.9) {
+                    bubbleEl.innerText = bubbles[Math.floor(Math.random()*bubbles.length)];
+                    bubbleEl.classList.add('show');
+                    setTimeout(() => bubbleEl.classList.remove('show'), 2000);
+                }
+            }, 50);
+
+            // After 5 seconds, move cursor
+            setTimeout(() => {
+                clearInterval(STATE.botInterval);
+                document.getElementById('mobile-map-toggle').click(); // Open Map
+                
+                cursorEl.style.display = 'block';
+                // Start position (random on screen)
+                cursorEl.style.top = '80%'; cursorEl.style.left = '20%';
+
+                setTimeout(() => {
+                    // Move to center of map (approx) then to target? 
+                    // Since Map container is fixed, we simulate relative movement
+                    const mapRect = document.getElementById('map').getBoundingClientRect();
+                    const endX = mapRect.left + mapRect.width/2 + (Math.random()*50-25);
+                    const endY = mapRect.top + mapRect.height/2 + (Math.random()*50-25);
+                    
+                    cursorEl.style.top = endY + 'px';
+                    cursorEl.style.left = endX + 'px';
+                    
+                    // Shake effect
+                    setTimeout(() => {
+                        // Place Marker programmatically
+                        guessMarker = L.marker([targetLat, targetLng]).addTo(map);
+                        
+                        setTimeout(() => {
+                             // Submit
+                             cursorEl.style.display = 'none';
+                             window.submitGuess(true); // force submit
+                             checkBetResult(outcome);
+                        }, 1000);
+
+                    }, 1500);
+
+                }, 500);
+
+            }, 5000);
+        }
+
+        function checkBetResult(actualOutcome) {
+            let win = false;
+            let multiplier = 0;
+
+            if(STATE.betOption === 'god' && actualOutcome === 'god') { win = true; multiplier = 15; }
+            if(STATE.betOption === 'solid' && (actualOutcome === 'solid' || actualOutcome === 'god')) { win = true; multiplier = 3; }
+            if(STATE.betOption === 'drunk' && actualOutcome === 'drunk') { win = true; multiplier = 2; }
+            if(STATE.betOption === 'ocean' && actualOutcome === 'ocean') { win = true; multiplier = 10; }
+
+            const profit = win ? STATE.betAmount * multiplier : 0;
+            STATE.totalScore += profit;
+            localStorage.setItem('geo_total_score', STATE.totalScore.toString());
+
+            // Override result text
+            const resDist = document.getElementById('res-dist');
+            resDist.innerHTML = win ? `<span style="color:#00ff00">YOU WON!</span>` : `<span style="color:red">YOU LOST</span>`;
+            document.getElementById('res-pts').innerText = win ? `+${profit} XP` : `-${STATE.betAmount} XP`;
+        }
 
         // --- GAME LOGIC ---
         window.startEndless = () => {
+            STATE.countryFilter = null;
             document.body.classList.add('game-active');
             STATE.mode = 'endless'; STATE.score = 0;
             updateHUD(); startGameLoop();
         };
 
         window.startChallenge = () => {
+            STATE.countryFilter = null;
             document.body.classList.add('game-active');
             STATE.mode = 'challenge'; STATE.round = 1; STATE.score = 0; STATE.maxRounds = 5;
             updateHUD(); startGameLoop();
@@ -895,17 +1085,37 @@
         }
 
         async function pickRandomLocation() {
-            if(LOCATIONS.length < 1) return { id: '5177821635678829', lat: 48.8566, lng: 2.3522, city: { name: "Paris", flag: "🇫🇷"} };
-            const city = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
+            // 1. Check Country Filter
+            let pool = LOCATIONS;
+            if(STATE.countryFilter && COUNTRY_LOCATIONS[STATE.countryFilter]) {
+                pool = COUNTRY_LOCATIONS[STATE.countryFilter];
+            }
+
+            // Fallback
+            if(pool.length < 1) return { id: '5177821635678829', lat: 48.8566, lng: 2.3522, city: { name: "Paris", flag: "🇫🇷"} };
+            
+            // 2. Pick Item
+            const city = pool[Math.floor(Math.random() * pool.length)];
+            
+            // 3. Get Mapillary ID
             const range = 0.04;
             const rLat = city.lat + (Math.random() * range * 2 - range);
             const rLng = city.lng + (Math.random() * range * 2 - range);
             const bbox = `${rLng-0.005},${rLat-0.005},${rLng+0.005},${rLat+0.005}`;
+            
             try {
                 const res = await fetch(`https://graph.mapillary.com/images?access_token=${MLY_TOKEN}&fields=id,geometry&bbox=${bbox}&limit=1`);
                 const data = await res.json();
                 if(data.data && data.data.length > 0) {
-                    return { id: data.data[0].id, lat: data.data[0].geometry.coordinates[1], lng: data.data[0].geometry.coordinates[0], city: city };
+                    const foundName = city.name || (STATE.countryFilter ? COUNTRY_META.find(c=>c.id===STATE.countryFilter).name : "Unknown");
+                    const foundFlag = city.flag || (STATE.countryFilter ? COUNTRY_META.find(c=>c.id===STATE.countryFilter).flag : "🏳️");
+                    
+                    return { 
+                        id: data.data[0].id, 
+                        lat: data.data[0].geometry.coordinates[1], 
+                        lng: data.data[0].geometry.coordinates[0], 
+                        city: { name: foundName, flag: foundFlag } 
+                    };
                 } else return pickRandomLocation(); 
             } catch(e) { return pickRandomLocation(); }
         }
@@ -934,7 +1144,6 @@
             STATE.isLocked = false;
             document.getElementById('result-sheet').classList.remove('show');
             document.getElementById('map-container').classList.remove('map-result-mode', 'open');
-            document.getElementById('mobile-map-toggle').style.display = 'flex';
             document.getElementById('res-mp-list').style.display = 'none';
 
             if(guessMarker) map.removeLayer(guessMarker);
@@ -950,6 +1159,15 @@
             btn.classList.remove('active');
             btn.innerText = t('btn_guess_tap');
             btn.disabled = true;
+            
+            // Casino Mode specifics
+            if(STATE.mode === 'casino') {
+                document.getElementById('mobile-map-toggle').style.display = 'none';
+                document.getElementById('confirm-btn').style.display = 'none';
+            } else {
+                document.getElementById('mobile-map-toggle').style.display = 'flex';
+                document.getElementById('confirm-btn').style.display = 'block';
+            }
             
             const nextBtn = document.getElementById('next-btn');
             nextBtn.classList.remove('loading');
@@ -978,7 +1196,7 @@
             if(STATE.timeLeft < 10) el.classList.add('warning'); else el.classList.remove('warning');
         }
 
-        // --- MULTIPLAYER ---
+        // --- MULTIPLAYER & QR ---
         window.createRoom = () => {
             const btn = document.getElementById('btn-create');
             btn.classList.add('loading');
@@ -1006,9 +1224,34 @@
             if(code.length !== 5) return;
             const btn = document.getElementById('btn-join');
             btn.classList.add('loading');
+            // ... (Same join logic)
+            performJoin(code);
+        };
+        
+        // Native Telegram QR Scanner
+        window.scanQrJoin = () => {
+            if(window.Telegram?.WebApp) {
+                window.Telegram.WebApp.showScanQrPopup({ text: 'Scan Lobby Code' }, (text) => {
+                    // Telegram returns text, we expect 5 digits
+                    if(text && text.length >= 5) {
+                        // Sometimes text is URL, extract digits? For now assume raw code
+                        const match = text.match(/\d{5}/);
+                        if(match) {
+                            window.Telegram.WebApp.closeScanQrPopup();
+                            document.getElementById('join-code').value = match[0];
+                            window.joinRoom();
+                            return true; // close scanner
+                        }
+                    }
+                });
+            } else {
+                alert("Only available in Telegram");
+            }
+        };
 
-            get(ref(db, 'games/' + code)).then((snap) => {
-                btn.classList.remove('loading');
+        function performJoin(code) {
+             get(ref(db, 'games/' + code)).then((snap) => {
+                document.getElementById('btn-join').classList.remove('loading');
                 if(snap.exists()) {
                     STATE.gameId = code;
                     STATE.mpRole = 'guest';
@@ -1021,12 +1264,24 @@
                     alert("Room not found");
                 }
             });
-        };
+        }
 
         function enterLobby(code) {
             document.getElementById('friend-menu').classList.add('hidden');
             document.getElementById('lobby-screen').classList.remove('hidden');
             document.getElementById('lobby-code-display').innerText = code;
+            
+            // Generate QR
+            const qrContainer = document.getElementById('qr-container');
+            qrContainer.innerHTML = '';
+            new QRCode(qrContainer, {
+                text: code,
+                width: 128,
+                height: 128,
+                colorDark : "#000000",
+                colorLight : "#ffffff"
+            });
+
             if(STATE.mpRole === 'host') document.getElementById('host-actions').classList.remove('hidden');
             listenToLobby(code);
         }
@@ -1039,10 +1294,6 @@
             remove(ref(db, `games/${STATE.gameId}/players/${STATE.myUid}`));
             window.location.reload();
         };
-        
-        window.hostKick = (uid) => {
-             remove(ref(db, `games/${STATE.gameId}/players/${uid}`));
-        };
 
         function listenToLobby(code) {
             onValue(ref(db, 'games/' + code), (snap) => {
@@ -1052,7 +1303,7 @@
                     alert(t('msg_kicked')); window.location.reload(); return;
                 }
                 STATE.players = data.players;
-                renderPlayerList(data.players, data.host);
+                renderPlayerList(data.players);
 
                 if(data.status === 'starting' || data.status === 'playing') {
                     document.getElementById('lobby-screen').classList.add('hidden');
@@ -1069,18 +1320,14 @@
             });
         }
 
-        function renderPlayerList(players, hostId) {
+        function renderPlayerList(players) {
             const list = document.getElementById('player-list');
             list.innerHTML = '';
             Object.keys(players).forEach(uid => {
                 const p = players[uid];
                 const div = document.createElement('div');
                 div.className = 'player-item';
-                let html = `<div class="player-info"><div class="player-avatar">${p.avatar}</div> <span>${p.name}</span></div>`;
-                if(STATE.mpRole === 'host' && uid !== STATE.myUid) {
-                    html += `<button class="kick-btn" onclick="window.hostKick('${uid}')">×</button>`;
-                }
-                div.innerHTML = html;
+                div.innerHTML = `<div class="player-info"><div class="player-avatar">${p.avatar}</div> <span>${p.name}</span></div>`;
                 list.appendChild(div);
             });
         }
@@ -1156,20 +1403,21 @@
 
             if(window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
 
-            // --- SAVE HISTORY IMMEDIATELY (Every Round) ---
-            STATE.totalScore += pts;
-            STATE.totalGames++; 
-            localStorage.setItem('geo_total_score', STATE.totalScore.toString());
-            localStorage.setItem('geo_total_games', STATE.totalGames.toString());
+            // --- SAVE HISTORY IMMEDIATELY (Unless Casino) ---
+            if(STATE.mode !== 'casino') {
+                STATE.totalScore += pts;
+                STATE.totalGames++; 
+                localStorage.setItem('geo_total_score', STATE.totalScore.toString());
+                localStorage.setItem('geo_total_games', STATE.totalGames.toString());
 
-            const historyItem = { 
-                date: new Date().toLocaleDateString(), 
-                pts: pts,
-                loc: STATE.currentLoc ? (STATE.currentLoc.city.name + " " + STATE.currentLoc.city.flag) : "Unknown" 
-            };
-            STATE.history.push(historyItem);
-            localStorage.setItem('geo_history', JSON.stringify(STATE.history));
-            // ----------------------------------------------
+                const historyItem = { 
+                    date: new Date().toLocaleDateString(), 
+                    pts: pts,
+                    loc: STATE.currentLoc ? (STATE.currentLoc.city.name + " " + STATE.currentLoc.city.flag) : "Unknown" 
+                };
+                STATE.history.push(historyItem);
+                localStorage.setItem('geo_history', JSON.stringify(STATE.history));
+            }
 
             if(STATE.mode === 'multi') {
                 document.getElementById('confirm-btn').innerText = t('btn_wait');
@@ -1179,14 +1427,17 @@
                 return;
             }
 
-            STATE.score += pts;
+            if(STATE.mode !== 'casino') STATE.score += pts;
             showSingleResult(uLat, aLat, dist, pts);
         };
 
         function showSingleResult(uLat, aLat, dist, pts) {
             setupResultMap(uLat, aLat);
-            document.getElementById('res-dist').innerText = formatDist(dist);
-            document.getElementById('res-pts').innerText = "+" + pts + " pts";
+            // Casino has its own result text logic in checkBetResult, this is default
+            if(STATE.mode !== 'casino') {
+                document.getElementById('res-dist').innerText = formatDist(dist);
+                document.getElementById('res-pts').innerText = "+" + pts + " pts";
+            }
             document.getElementById('res-loc-name').innerHTML = STATE.currentLoc.city.name + " " + STATE.currentLoc.city.flag;
             
             const nextBtn = document.getElementById('next-btn');
@@ -1195,6 +1446,9 @@
             if (STATE.mode === 'challenge' && STATE.round >= STATE.maxRounds) {
                 nextBtnText.innerText = t('btn_finish');
                 nextBtn.onclick = showSummary;
+            } else if (STATE.mode === 'casino') {
+                 nextBtnText.innerText = t('btn_menu');
+                 nextBtn.onclick = window.showMainMenu;
             } else {
                 nextBtnText.innerText = t('btn_next');
                 nextBtn.onclick = window.nextRound;
@@ -1212,9 +1466,9 @@
                 if(uid === STATE.myUid) return;
                 const g = guesses[uid];
                 const gLat = L.latLng(g.lat, g.lng);
-                const m = L.circleMarker(gLat, { radius:5, color:'#ff4b2b', fillColor:'#ff4b2b', fillOpacity:1 }).addTo(map);
-                const l = L.polyline([gLat, actual], { color: '#ff4b2b', weight: 1, dashArray:'4,4' }).addTo(map);
-                oppMarkers.push(m, l);
+                // Smaller markers for 20 players
+                const m = L.circleMarker(gLat, { radius:4, color:'#ff4b2b', fillColor:'#ff4b2b', fillOpacity:0.8 }).addTo(map);
+                oppMarkers.push(m);
             });
 
             const pts = myGuess ? myGuess.pts : 0;
@@ -1257,7 +1511,6 @@
         }
 
         function setupResultMap(uLat, aLat) {
-            document.getElementById('mobile-map-toggle').style.display = 'none';
             document.getElementById('map-container').classList.add('map-result-mode', 'open');
             setTimeout(() => map.invalidateSize(), 200);
 
@@ -1315,3 +1568,4 @@
         init();
     </script>
 </body>
+</html>
