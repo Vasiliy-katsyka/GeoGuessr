@@ -1044,7 +1044,17 @@
             L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '©CARTO' }).addTo(map);
 
             const { Viewer } = mapillary;
-            mly = new Viewer({ accessToken: MLY_TOKEN, container: 'mly', component: { cover: false, sequence: false } });
+            mly = new Viewer({ 
+                accessToken: MLY_TOKEN, 
+                container: 'mly', 
+                component: { cover: false, sequence: false },
+                // Force simple image fetching
+                imageTiling: false, 
+                // Attempt to pass our custom fetch (MapillaryJS v4.1 supports this!)
+                apiClient: {
+                    fetch: window.fetch // This passes our "Proxied Fetch" into Mapillary!
+                }
+            });
 
             map.on('click', (e) => {
                 if(STATE.isLocked) return;
