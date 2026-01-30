@@ -17,7 +17,31 @@
             } catch (e) { console.log("Telegram FS failed", e); }
         }
     </script>
+    <script>
+        (function() {
+            // PASTE YOUR CLOUDFLARE WORKER URL HERE
+            const WORKER_URL = "https://geoguessr.kviappsgames.workers.dev"; 
 
+            const originalFetch = window.fetch;
+            
+            // Override the standard fetch function
+            window.fetch = async function(input, init) {
+                let url = input;
+                
+                // If the request is a string URL and goes to Mapillary
+                if (typeof input === 'string' && (input.includes('mapillary.com') || input.includes('mly'))) {
+                    // Redirect it through your Cloudflare Worker
+                    url = `${WORKER_URL}?url=${encodeURIComponent(input)}`;
+                }
+                // Also handle Request objects (used internally by some libraries)
+                else if (input instanceof Request && (input.url.includes('mapillary.com') || input.url.includes('mly'))) {
+                    url = `${WORKER_URL}?url=${encodeURIComponent(input.url)}`;
+                }
+
+                return originalFetch(url, init);
+            };
+        })();
+    </script>
     <!-- External Libs -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://unpkg.com/mapillary-js@4.1.0/dist/mapillary.css" rel="stylesheet" />
