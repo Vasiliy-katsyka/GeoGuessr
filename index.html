@@ -17,124 +17,7 @@
             } catch (e) { console.log("Telegram FS failed", e); }
         }
     </script>
-<!-- START: CLOUDFLARE PROXY INTEGRATION -->
-    <script>
-        (function() {
-            // 1. YOUR CLOUDFLARE WORKER URL
-            const WORKER_URL = "https://geoguessr.kviappsgames.workers.dev"; // <--- CHECK THIS!
 
-            // 2. Domains to block (Added 'scontent' which holds the actual images)
-            const BLOCKED_DOMAINS = [
-                'mapillary.com', 'mly', 'fbcdn', 'facebook', 
-                'cdninstagram', 'scontent', 'graph.mapillary'
-            ];
-
-            // Helper to decide if we need to proxy a URL
-            function shouldProxy(url) {
-                if (!url || typeof url !== 'string') return false;
-                if (url.includes(WORKER_URL)) return false; // Don't proxy the proxy
-                return BLOCKED_DOMAINS.some(d => url.includes(d));
-            }
-
-            // Helper to generate the proxy URL
-            function getProxyUrl(url) {
-                return `${WORKER_URL}?url=${encodeURIComponent(url)}`;
-            }
-
-            // --- A. OVERRIDE FETCH (Main Thread) ---
-            const originalFetch = window.fetch;
-            window.fetch = async function(input, init) {
-                let url = input;
-                let isRequest = false;
-                if (input instanceof Request) {
-                    url = input.url;
-                    isRequest = true;
-                }
-
-                if (shouldProxy(url)) {
-                    const newUrl = getProxyUrl(url);
-                    if (isRequest) {
-                        // Recreate Request object
-                        input = new Request(newUrl, {
-                            method: input.method, headers: input.headers, body: input.body,
-                            mode: input.mode, credentials: input.credentials,
-                            cache: input.cache, redirect: input.redirect,
-                            referrer: input.referrer, integrity: input.integrity
-                        });
-                    } else {
-                        input = newUrl;
-                    }
-                }
-                return originalFetch(input, init);
-            };
-
-            // --- B. OVERRIDE XHR (Main Thread) ---
-            const originalOpen = XMLHttpRequest.prototype.open;
-            XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-                if (shouldProxy(url)) {
-                    url = getProxyUrl(url);
-                }
-                return originalOpen.call(this, method, url, ...rest);
-            };
-
-            // --- C. OVERRIDE WEB WORKERS (Background Threads) ---
-            // This injects the fetch override INTO Mapillary's background workers
-            const OriginalWorker = window.Worker;
-            window.Worker = function(scriptURL, options) {
-                // We must fetch the worker script text manually, inject our override, and create a blob
-                const blobWorker = async () => {
-                    try {
-                        const response = await originalFetch(scriptURL);
-                        const scriptText = await response.text();
-                        
-                        // The code we want to run INSIDE the worker
-                        const overrideCode = `
-                            const WORKER_URL = "${WORKER_URL}";
-                            const BLOCKED_DOMAINS = ${JSON.stringify(BLOCKED_DOMAINS)};
-                            
-                            function shouldProxy(url) {
-                                if (!url || typeof url !== 'string') return false;
-                                if (url.includes(WORKER_URL)) return false;
-                                return BLOCKED_DOMAINS.some(d => url.includes(d));
-                            }
-                            
-                            const originalFetch = self.fetch;
-                            self.fetch = async function(input, init) {
-                                let url = input;
-                                if (input instanceof Request) url = input.url;
-                                
-                                if (shouldProxy(url)) {
-                                    const newUrl = "${WORKER_URL}?url=" + encodeURIComponent(url);
-                                    if (input instanceof Request) {
-                                        input = new Request(newUrl, {
-                                            method: input.method, headers: input.headers, body: input.body,
-                                            mode: input.mode, credentials: input.credentials
-                                        });
-                                    } else {
-                                        input = newUrl;
-                                    }
-                                }
-                                return originalFetch(input, init);
-                            };
-                        `;
-
-                        // Combine our override + original worker code
-                        const blob = new Blob([overrideCode + scriptText], { type: 'application/javascript' });
-                        const blobURL = URL.createObjectURL(blob);
-                        
-                        // Start the real worker with the modified code
-                        return new OriginalWorker(blobURL, options);
-                    } catch (e) {
-                        console.error("Worker Proxy Failed:", e);
-                        return new OriginalWorker(scriptURL, options);
-                    }
-                };
-
-                return new OriginalWorker(scriptURL, options);
-            };
-        })();
-    </script>
-    <!-- END: CLOUDFLARE PROXY INTEGRATION -->
     <!-- External Libs -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://unpkg.com/mapillary-js@4.1.0/dist/mapillary.css" rel="stylesheet" />
@@ -144,262 +27,255 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
     <style>
-        /* =========================================================
-           🌫️ GEO GUESSR ULTIMATE — MAX GLASSMORPHISM EDITION
-           ========================================================= */
-        
-        /* ---------- ROOT VARIABLES ---------- */
+        /* ==================== THEME & VARS ==================== */
         :root {
             --bg-color: #050505;
             --text-color: #ffffff;
-        
             --primary-grad: linear-gradient(135deg, #00C6FF 0%, #0072FF 100%);
-            --accent-grad: linear-gradient(135deg, #7f7cff, #00e5ff);
-        
-            /* GLASS CORE */
-            --glass-bg: rgba(255, 255, 255, 0.035);
-            --glass-bg-strong: rgba(255, 255, 255, 0.06);
-        
-            --glass-border: rgba(255, 255, 255, 0.18);
-            --glass-border-soft: rgba(255, 255, 255, 0.1);
-        
-            --glass-highlight: rgba(255, 255, 255, 0.35);
-            --glass-shadow: 0 25px 80px rgba(0, 0, 0, 0.7);
-        
-            --blur-strong: 60px;
-            --blur-medium: 40px;
-            --blur-soft: 20px;
-        
-            --safe-top: 80px;
-        }
-        
-        /* ---------- BASE ---------- */
-        html, body {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-            background: radial-gradient(circle at top, #0a0a0f, #020202 60%);
-            color: var(--text-color);
-            overflow: hidden;
-        }
-        
-        /* ---------- NOISE OVERLAY ---------- */
-        body::before {
-            content: "";
-            position: fixed;
-            inset: 0;
-            background-image:
-                repeating-radial-gradient(circle at 20% 20%,
-                    rgba(255,255,255,0.03),
-                    rgba(255,255,255,0.03) 1px,
-                    transparent 1px,
-                    transparent 2px);
-            opacity: 0.25;
-            pointer-events: none;
-            z-index: 9999;
-        }
-        
-        /* ---------- BACKGROUND BLOBS ---------- */
-        .bg-blob {
-            position: absolute;
-            border-radius: 50%;
-            filter: blur(120px);
-            opacity: 0.7;
-            animation: blobFloat 18s ease-in-out infinite alternate;
-            pointer-events: none;
-        }
-        
-        .blob-1 { width: 420px; height: 420px; background: #0072ff; top: -10%; left: -10%; }
-        .blob-2 { width: 520px; height: 520px; background: #7f00ff; bottom: -15%; right: -15%; animation-delay: -6s; }
-        .blob-3 { width: 380px; height: 380px; background: #00ffcc; top: 35%; left: 25%; opacity: 0.35; }
-        
-        @keyframes blobFloat {
-            from { transform: translate(0,0) scale(1); }
-            to { transform: translate(60px,40px) scale(1.15); }
-        }
-        
-        /* =========================================================
-           🧊 GLASS CORE COMPONENT
-           ========================================================= */
-        .glass-panel,
-        .full-screen-menu,
-        #map-container,
-        #timer-box,
-        #score-box,
-        #result-sheet,
-        .player-item,
-        .country-card,
-        #settings-btn,
-        #confirm-btn,
-        .input-code {
-        
-            background:
-                linear-gradient(180deg,
-                    rgba(255,255,255,0.12),
-                    rgba(255,255,255,0.02)),
-                var(--glass-bg);
-        
-            backdrop-filter: blur(var(--blur-strong)) saturate(180%);
-            -webkit-backdrop-filter: blur(var(--blur-strong)) saturate(180%);
-        
-            border-radius: 28px;
-            border: 1px solid var(--glass-border-soft);
-        
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,0.35),
-                inset 0 -1px 0 rgba(0,0,0,0.3),
-                var(--glass-shadow);
-        
-            position: relative;
-            overflow: hidden;
-        }
-        
-        /* ---------- GLASS LIGHT REFRACTION ---------- */
-        .glass-panel::before,
-        .full-screen-menu::before,
-        #map-container::before,
-        #result-sheet::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background:
-                linear-gradient(120deg,
-                    transparent 30%,
-                    rgba(255,255,255,0.12),
-                    transparent 70%);
-            opacity: 0.4;
-            pointer-events: none;
-        }
-        
-        /* ---------- EDGE GLOW ---------- */
-        .glass-panel::after,
-        #map-container::after,
-        #result-sheet::after {
-            content: "";
-            position: absolute;
-            inset: 0;
-            border-radius: inherit;
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
-            pointer-events: none;
-        }
-        
-        /* =========================================================
-           🧭 MENUS
-           ========================================================= */
-        .full-screen-menu {
-            backdrop-filter: blur(var(--blur-strong)) brightness(1.05);
-            padding: 24px;
-        }
-        
-        .menu-title {
-            font-size: 3.6rem;
-            font-weight: 900;
-            background: var(--primary-grad);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            filter: drop-shadow(0 0 35px rgba(0,198,255,0.6));
-        }
-        
-        /* =========================================================
-           🔘 BUTTONS
-           ========================================================= */
-        .btn-main {
-            background:
-                linear-gradient(180deg,
-                    rgba(255,255,255,0.25),
-                    rgba(255,255,255,0.05)),
-                rgba(255,255,255,0.08);
-        
-            backdrop-filter: blur(var(--blur-medium));
-            border-radius: 22px;
-            border: 1px solid rgba(255,255,255,0.25);
-        
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,0.5),
-                0 15px 40px rgba(0,0,0,0.6);
-        
-            transition: transform 0.15s ease, box-shadow 0.2s ease;
-        }
-        
-        .btn-main:active {
-            transform: scale(0.96);
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,0.25),
-                0 8px 25px rgba(0,0,0,0.7);
-        }
-        
-        /* =========================================================
-           🌍 MAP CONTAINER
-           ========================================================= */
-        #map-container {
-            backdrop-filter: blur(70px) saturate(160%);
-        }
-        
-        #map {
-            border-radius: 22px;
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
-        }
-        
-        /* =========================================================
-           📊 RESULT SHEET
-           ========================================================= */
-        #result-sheet {
-            border-radius: 38px 38px 0 0;
-            backdrop-filter: blur(80px) saturate(160%);
-        }
-        
-        /* =========================================================
-           👥 PLAYER ITEMS
-           ========================================================= */
-        .player-item {
-            backdrop-filter: blur(35px);
-            border-radius: 18px;
-        }
-        
-        /* =========================================================
-           🌐 COUNTRY CARDS
-           ========================================================= */
-        .country-card {
-            backdrop-filter: blur(25px);
-            border-radius: 18px;
-        }
-        
-        .country-card.selected {
-            background:
-                linear-gradient(135deg,
-                    rgba(0,198,255,0.35),
-                    rgba(0,114,255,0.25));
-            border-color: #00c6ff;
-            box-shadow: 0 0 30px rgba(0,198,255,0.5);
-        }
-        
-        /* =========================================================
-           🧊 INPUT
-           ========================================================= */
-        .input-code {
-            backdrop-filter: blur(30px);
-            font-weight: 900;
-        }
-        
-        /* =========================================================
-           🧭 HUD
-           ========================================================= */
-        #timer-box,
-        #score-box {
-            backdrop-filter: blur(35px);
-        }
-        
-        /* =========================================================
-           ✨ MICRO DETAILS
-           ========================================================= */
-        .hidden { display: none !important; }
-        .scrollable { overflow-y: auto; -webkit-overflow-scrolling: touch; }
-        
-        ::selection {
-            background: rgba(0,198,255,0.4);
+            
+            /* PREMIUM GLASS VARIABLES */
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border-top: rgba(255, 255, 255, 0.15);
+            --glass-border-bottom: rgba(0, 0, 0, 0.3);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+            --blur: 40px; 
+            --safe-top: 80px; 
         }
 
+        body, html { 
+            margin: 0; padding: 0; height: 100%; 
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            background: var(--bg-color); color: var(--text-color);
+            overflow: hidden; -webkit-tap-highlight-color: transparent;
+        }
+
+        /* NOISE TEXTURE OVERLAY */
+        body::before {
+            content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+            opacity: 0.4; pointer-events: none; z-index: 1; mix-blend-mode: overlay;
+        }
+
+        /* ==================== ANIMATED BACKGROUND ==================== */
+        .bg-blob {
+            position: absolute; border-radius: 50%;
+            filter: blur(80px); opacity: 0.6; z-index: 0;
+            animation: floatBlob 15s infinite alternate ease-in-out;
+            pointer-events: none;
+        }
+        .blob-1 { top: -10%; left: -10%; width: 350px; height: 350px; background: #0072FF; }
+        .blob-2 { bottom: -10%; right: -20%; width: 400px; height: 400px; background: #7a28e0; animation-delay: -5s; }
+        .blob-3 { top: 40%; left: 30%; width: 300px; height: 300px; background: #00f260; animation-duration: 20s; opacity: 0.3; }
+
+        @keyframes floatBlob {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(30px, 50px) scale(1.1); }
+        }
+
+        /* ==================== PREMIUM GLASS PANEL ==================== */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--blur)); -webkit-backdrop-filter: blur(var(--blur));
+            
+            /* 3D Border Effect */
+            border-top: 1px solid var(--glass-border-top);
+            border-left: 1px solid var(--glass-border-top);
+            border-bottom: 1px solid var(--glass-border-bottom);
+            border-right: 1px solid var(--glass-border-bottom);
+            
+            border-radius: 28px;
+            box-shadow: 
+                var(--glass-shadow), 
+                inset 0 0 0 1px rgba(255, 255, 255, 0.05); /* Inner stroke */
+            position: relative; overflow: hidden;
+        }
+        
+        /* Glass Shine Effect */
+        .glass-panel::after {
+            content: ""; position: absolute; top: 0; left: 0; right: 0; height: 40%;
+            background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%);
+            pointer-events: none;
+        }
+
+        .hidden { display: none !important; }
+        .scrollable { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+        /* ==================== UI ELEMENTS ==================== */
+        #settings-btn {
+            position: absolute; top: var(--safe-top); right: 20px; z-index: 6000;
+            width: 44px; height: 44px; 
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%; display: flex; justify-content: center; align-items: center;
+            border: 1px solid rgba(255,255,255,0.2); cursor: pointer; font-size: 22px;
+            backdrop-filter: blur(10px);
+            transition: opacity 0.3s;
+        }
+        body.game-active #settings-btn { opacity: 0; pointer-events: none; }
+
+        /* ==================== MENUS ==================== */
+        .full-screen-menu {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 5000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 20px; box-sizing: border-box;
+            background: rgba(0,0,0,0.2);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            transition: opacity 0.3s ease;
+        }
+
+        .menu-title { 
+            font-size: 3.5rem; font-weight: 900; margin-bottom: 5px; margin-top: 10px;
+            background: var(--primary-grad); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            text-align: center; letter-spacing: -1px; 
+            filter: drop-shadow(0 0 25px rgba(0, 198, 255, 0.4));
+        }
+        .menu-subtitle { font-size: 1rem; color: #bbb; margin-bottom: 30px; text-align: center; font-weight: 500; }
+
+        /* Buttons */
+        .btn-main {
+            width: 100%; max-width: 340px; padding: 18px; margin: 8px 0;
+            border: none; border-radius: 20px; font-size: 1.1rem; font-weight: 700;
+            cursor: pointer; color: white; text-transform: uppercase; letter-spacing: 1px;
+            position: relative; display: flex; align-items: center; justify-content: center; gap: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3); 
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+        .btn-main:active { transform: scale(0.97); }
+        
+        .btn-blue { background: linear-gradient(135deg, rgba(0, 198, 255, 0.8) 0%, rgba(0, 114, 255, 0.8) 100%); }
+        .btn-orange { background: linear-gradient(135deg, #FF512F 0%, #F09819 100%); }
+        .btn-green { background: linear-gradient(135deg, rgba(17, 153, 142, 0.8) 0%, rgba(56, 239, 125, 0.8) 100%); }
+        .btn-purple { background: linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%); } /* New for Country Mode */
+        .btn-dark { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); }
+        .btn-red { background: rgba(255, 75, 75, 0.8); }
+
+        .btn-spinner {
+            width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3);
+            border-top: 3px solid white; border-radius: 50%;
+            animation: spin 0.8s linear infinite; display: none;
+        }
+        .btn-main.loading .btn-content { display: none; }
+        .btn-main.loading .btn-spinner { display: block; }
+
+        /* ==================== COUNTRY GRID ==================== */
+        #country-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+            width: 100%; max-width: 340px; margin-bottom: 20px;
+            max-height: 50vh; overflow-y: auto; padding: 5px;
+        }
+        .country-card {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px; padding: 15px; text-align: center;
+            cursor: pointer; transition: 0.2s;
+        }
+        .country-card:active, .country-card.selected {
+            background: rgba(0, 198, 255, 0.2); border-color: #00C6FF;
+        }
+        .c-flag { font-size: 2.5rem; display: block; margin-bottom: 5px; }
+        .c-name { font-size: 0.9rem; font-weight: 600; color: #ddd; }
+
+        /* ==================== MULTIPLAYER UI ==================== */
+        .input-code {
+            display: block; width: 80%; margin: 15px auto; padding: 16px;
+            font-size: 24px; font-weight: 800; text-align: center; letter-spacing: 6px;
+            color: white; background: rgba(0, 0, 0, 0.3); 
+            border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 16px;
+            backdrop-filter: blur(10px); outline: none; text-transform: uppercase;
+        }
+        
+        #lobby-qr-container {
+            margin: 20px 0; padding: 15px; background: white; border-radius: 16px;
+            display: inline-block; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        
+        #player-list { 
+            width: 100%; max-width: 340px; max-height: 250px; /* Scrollable for 20 players */
+            overflow-y: auto; margin: 20px 0; padding-right: 5px;
+        }
+        .player-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px; background: rgba(255,255,255,0.08); margin-bottom: 8px; border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        /* ==================== HUD & MAP ==================== */
+        #top-hud {
+            position: absolute; top: var(--safe-top); left: 0; width: 100%;
+            padding: 0 15px; box-sizing: border-box;
+            display: flex; justify-content: space-between; align-items: flex-start;
+            z-index: 100; pointer-events: none;
+        }
+        #timer-box, #score-box {
+            background: var(--glass-bg); backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.15); border-radius: 16px;
+            padding: 10px 16px; color: white; margin-bottom: 8px;
+            pointer-events: all; box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+        #timer-box { font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+        
+        #map-container {
+            position: absolute; bottom: 120px; right: 20px;
+            width: 90vw; max-width: 450px; height: 45vh;
+            background: rgba(20, 20, 25, 0.9); 
+            backdrop-filter: blur(40px);
+            border: 1px solid rgba(255,255,255,0.2); border-radius: 28px;
+            box-shadow: 0 30px 80px rgba(0,0,0,0.8); z-index: 200;
+            transform: scale(0); opacity: 0; pointer-events: none;
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            display: flex; flex-direction: column; padding: 8px; box-sizing: border-box;
+        }
+        #map-container.open { transform: scale(1); opacity: 1; pointer-events: all; }
+        
+        #map-container.map-result-mode {
+            bottom: 0 !important; right: 0 !important; width: 100% !important; height: 100% !important;
+            border-radius: 0 !important; background: #1a1a1a; padding: 0; max-width: none; z-index: 10;
+        }
+        #map { flex-grow: 1; width: 100%; border-radius: 22px; }
+
+        #confirm-btn {
+            width: 100%; padding: 16px; margin-top: 8px;
+            background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.4);
+            font-weight: 800; border: none; text-transform: uppercase;
+            border-radius: 16px; cursor: not-allowed; transition: 0.3s;
+        }
+        #confirm-btn.active { 
+            background: var(--primary-grad); color: white; cursor: pointer; 
+            box-shadow: 0 5px 20px rgba(0, 198, 255, 0.4);
+        }
+
+        #result-sheet {
+            position: absolute; bottom: 0; left: 0; width: 100%;
+            background: rgba(10, 10, 15, 0.95); 
+            backdrop-filter: blur(50px);
+            border-top: 1px solid rgba(255,255,255,0.2);
+            border-radius: 35px 35px 0 0;
+            z-index: 3000; transform: translateY(110%); transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+            padding: 30px 25px 50px 25px; box-sizing: border-box;
+            display: flex; flex-direction: column; gap: 15px; color: white;
+            box-shadow: 0 -15px 60px rgba(0,0,0,0.8);
+        }
+        #result-sheet.show { transform: translateY(0); }
+        
+        /* Mobile Toggle Button */
+        #mobile-map-toggle {
+            position: absolute; bottom: 35px; right: 20px;
+            width: 65px; height: 65px; border-radius: 50%;
+            background: var(--primary-grad); color: white;
+            font-size: 28px; border: 3px solid rgba(255,255,255,0.2);
+            z-index: 100; display: flex; justify-content: center; align-items: center;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.6);
+            transition: transform 0.2s;
+        }
+
+        /* Loading & Utility */
+        #loading {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #050505; z-index: 8000;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -1051,17 +927,7 @@
             L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '©CARTO' }).addTo(map);
 
             const { Viewer } = mapillary;
-            mly = new Viewer({ 
-                accessToken: MLY_TOKEN, 
-                container: 'mly', 
-                component: { cover: false, sequence: false },
-                // Force simple image fetching
-                imageTiling: false, 
-                // Attempt to pass our custom fetch (MapillaryJS v4.1 supports this!)
-                apiClient: {
-                    fetch: window.fetch // This passes our "Proxied Fetch" into Mapillary!
-                }
-            });
+            mly = new Viewer({ accessToken: MLY_TOKEN, container: 'mly', component: { cover: false, sequence: false } });
 
             map.on('click', (e) => {
                 if(STATE.isLocked) return;
