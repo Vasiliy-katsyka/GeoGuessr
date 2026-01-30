@@ -19,27 +19,72 @@
     </script>
     <script>
         (function() {
-            // PASTE YOUR CLOUDFLARE WORKER URL HERE
-            const WORKER_URL = "https://geoguessr.kviappsgames.workers.dev"; 
+            // !!! PASTE YOUR CLOUDFLARE WORKER URL HERE !!!
+            const WORKER_URL = "https://geo-proxy.yourname.workers.dev"; 
 
+            // Domains that must go through the proxy (Mapillary + Meta/Facebook CDNs)
+            const BLOCKED_DOMAINS = [
+                'mapillary.com', 
+                'mly', 
+                'fbcdn', 
+                'facebook', 
+                'cdninstagram'
+            ];
+
+            function shouldProxy(url) {
+                if (!url || typeof url !== 'string') return false;
+                // If it's already proxied, don't double-proxy
+                if (url.includes(WORKER_URL)) return false;
+                // Check if url contains any of the blocked domains
+                return BLOCKED_DOMAINS.some(domain => url.includes(domain));
+            }
+
+            // 1. Override Fetch (Used by most modern apps)
             const originalFetch = window.fetch;
-            
-            // Override the standard fetch function
             window.fetch = async function(input, init) {
                 let url = input;
-                
-                // If the request is a string URL and goes to Mapillary
-                if (typeof input === 'string' && (input.includes('mapillary.com') || input.includes('mly'))) {
-                    // Redirect it through your Cloudflare Worker
-                    url = `${WORKER_URL}?url=${encodeURIComponent(input)}`;
-                }
-                // Also handle Request objects (used internally by some libraries)
-                else if (input instanceof Request && (input.url.includes('mapillary.com') || input.url.includes('mly'))) {
-                    url = `${WORKER_URL}?url=${encodeURIComponent(input.url)}`;
+                let isRequestObject = false;
+
+                if (input instanceof Request) {
+                    url = input.url;
+                    isRequestObject = true;
                 }
 
-                return originalFetch(url, init);
+                if (shouldProxy(url)) {
+                    // console.log("Proxying Fetch:", url); // Uncomment to debug
+                    const newUrl = `${WORKER_URL}?url=${encodeURIComponent(url)}`;
+                    
+                    if (isRequestObject) {
+                        // Recreate the request object with the new URL
+                        input = new Request(newUrl, {
+                            method: input.method,
+                            headers: input.headers,
+                            body: input.body,
+                            mode: input.mode,
+                            credentials: input.credentials,
+                            cache: input.cache,
+                            redirect: input.redirect,
+                            referrer: input.referrer,
+                            integrity: input.integrity,
+                        });
+                    } else {
+                        input = newUrl;
+                    }
+                }
+
+                return originalFetch(input, init);
             };
+
+            // 2. Override XMLHttpRequest (Used by some parts of Mapillary JS)
+            const originalOpen = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+                if (shouldProxy(url)) {
+                    // console.log("Proxying XHR:", url); // Uncomment to debug
+                    url = `${WORKER_URL}?url=${encodeURIComponent(url)}`;
+                }
+                return originalOpen.call(this, method, url, ...rest);
+            };
+
         })();
     </script>
     <!-- External Libs -->
