@@ -17,76 +17,124 @@
             } catch (e) { console.log("Telegram FS failed", e); }
         }
     </script>
+<!-- START: CLOUDFLARE PROXY INTEGRATION -->
     <script>
         (function() {
-            // !!! PASTE YOUR CLOUDFLARE WORKER URL HERE !!!
-            const WORKER_URL = "https://geo-proxy.yourname.workers.dev"; 
+            // 1. YOUR CLOUDFLARE WORKER URL
+            const WORKER_URL = "https://geo-proxy.yourname.workers.dev"; // <--- CHECK THIS!
 
-            // Domains that must go through the proxy (Mapillary + Meta/Facebook CDNs)
+            // 2. Domains to block (Added 'scontent' which holds the actual images)
             const BLOCKED_DOMAINS = [
-                'mapillary.com', 
-                'mly', 
-                'fbcdn', 
-                'facebook', 
-                'cdninstagram'
+                'mapillary.com', 'mly', 'fbcdn', 'facebook', 
+                'cdninstagram', 'scontent', 'graph.mapillary'
             ];
 
+            // Helper to decide if we need to proxy a URL
             function shouldProxy(url) {
                 if (!url || typeof url !== 'string') return false;
-                // If it's already proxied, don't double-proxy
-                if (url.includes(WORKER_URL)) return false;
-                // Check if url contains any of the blocked domains
-                return BLOCKED_DOMAINS.some(domain => url.includes(domain));
+                if (url.includes(WORKER_URL)) return false; // Don't proxy the proxy
+                return BLOCKED_DOMAINS.some(d => url.includes(d));
             }
 
-            // 1. Override Fetch (Used by most modern apps)
+            // Helper to generate the proxy URL
+            function getProxyUrl(url) {
+                return `${WORKER_URL}?url=${encodeURIComponent(url)}`;
+            }
+
+            // --- A. OVERRIDE FETCH (Main Thread) ---
             const originalFetch = window.fetch;
             window.fetch = async function(input, init) {
                 let url = input;
-                let isRequestObject = false;
-
+                let isRequest = false;
                 if (input instanceof Request) {
                     url = input.url;
-                    isRequestObject = true;
+                    isRequest = true;
                 }
 
                 if (shouldProxy(url)) {
-                    // console.log("Proxying Fetch:", url); // Uncomment to debug
-                    const newUrl = `${WORKER_URL}?url=${encodeURIComponent(url)}`;
-                    
-                    if (isRequestObject) {
-                        // Recreate the request object with the new URL
+                    const newUrl = getProxyUrl(url);
+                    if (isRequest) {
+                        // Recreate Request object
                         input = new Request(newUrl, {
-                            method: input.method,
-                            headers: input.headers,
-                            body: input.body,
-                            mode: input.mode,
-                            credentials: input.credentials,
-                            cache: input.cache,
-                            redirect: input.redirect,
-                            referrer: input.referrer,
-                            integrity: input.integrity,
+                            method: input.method, headers: input.headers, body: input.body,
+                            mode: input.mode, credentials: input.credentials,
+                            cache: input.cache, redirect: input.redirect,
+                            referrer: input.referrer, integrity: input.integrity
                         });
                     } else {
                         input = newUrl;
                     }
                 }
-
                 return originalFetch(input, init);
             };
 
-            // 2. Override XMLHttpRequest (Used by some parts of Mapillary JS)
+            // --- B. OVERRIDE XHR (Main Thread) ---
             const originalOpen = XMLHttpRequest.prototype.open;
             XMLHttpRequest.prototype.open = function(method, url, ...rest) {
                 if (shouldProxy(url)) {
-                    // console.log("Proxying XHR:", url); // Uncomment to debug
-                    url = `${WORKER_URL}?url=${encodeURIComponent(url)}`;
+                    url = getProxyUrl(url);
                 }
                 return originalOpen.call(this, method, url, ...rest);
             };
 
+            // --- C. OVERRIDE WEB WORKERS (Background Threads) ---
+            // This injects the fetch override INTO Mapillary's background workers
+            const OriginalWorker = window.Worker;
+            window.Worker = function(scriptURL, options) {
+                // We must fetch the worker script text manually, inject our override, and create a blob
+                const blobWorker = async () => {
+                    try {
+                        const response = await originalFetch(scriptURL);
+                        const scriptText = await response.text();
+                        
+                        // The code we want to run INSIDE the worker
+                        const overrideCode = `
+                            const WORKER_URL = "${WORKER_URL}";
+                            const BLOCKED_DOMAINS = ${JSON.stringify(BLOCKED_DOMAINS)};
+                            
+                            function shouldProxy(url) {
+                                if (!url || typeof url !== 'string') return false;
+                                if (url.includes(WORKER_URL)) return false;
+                                return BLOCKED_DOMAINS.some(d => url.includes(d));
+                            }
+                            
+                            const originalFetch = self.fetch;
+                            self.fetch = async function(input, init) {
+                                let url = input;
+                                if (input instanceof Request) url = input.url;
+                                
+                                if (shouldProxy(url)) {
+                                    const newUrl = "${WORKER_URL}?url=" + encodeURIComponent(url);
+                                    if (input instanceof Request) {
+                                        input = new Request(newUrl, {
+                                            method: input.method, headers: input.headers, body: input.body,
+                                            mode: input.mode, credentials: input.credentials
+                                        });
+                                    } else {
+                                        input = newUrl;
+                                    }
+                                }
+                                return originalFetch(input, init);
+                            };
+                        `;
+
+                        // Combine our override + original worker code
+                        const blob = new Blob([overrideCode + scriptText], { type: 'application/javascript' });
+                        const blobURL = URL.createObjectURL(blob);
+                        
+                        // Start the real worker with the modified code
+                        return new OriginalWorker(blobURL, options);
+                    } catch (e) {
+                        console.error("Worker Proxy Failed:", e);
+                        return new OriginalWorker(scriptURL, options);
+                    }
+                };
+
+                return new OriginalWorker(scriptURL, options);
+            };
         })();
     </script>
+    <!-- END: CLOUDFLARE PROXY INTEGRATION -->
     <!-- External Libs -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://unpkg.com/mapillary-js@4.1.0/dist/mapillary.css" rel="stylesheet" />
