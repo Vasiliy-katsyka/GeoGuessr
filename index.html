@@ -321,6 +321,10 @@
         <button class="btn-main btn-green" onclick="window.openFriendMenu()">
             <span class="btn-content" data-i18n="btn_friend">👥 Party Mode</span>
         </button>
+        <!-- Add this after the Profile button in #main-menu -->
+        <button class="btn-main btn-dark" style="background: linear-gradient(135deg, #f1c40f 0%, #f39c12 100%); color: #000;" onclick="window.openLeaderboard()">
+            <span class="btn-content">🏆 <span data-i18n="lbl_leaderboard">Leaderboard</span></span>
+        </button>
         <button class="btn-main btn-dark" onclick="window.openProfile()">
             <span class="btn-content" data-i18n="btn_profile">👤 Profile</span>
         </button>
@@ -356,6 +360,22 @@
         <div id="history-list" style="width:100%; max-width:340px; max-height:200px; overflow-y:auto;"></div>
         <button class="btn-main btn-dark" style="margin-top:20px;" onclick="window.closeProfile()" data-i18n="btn_back">Back</button>
         <button class="btn-main btn-red" style="transform:scale(0.8);" onclick="window.clearData()" data-i18n="btn_reset">🗑️ Reset</button>
+    </div>
+
+    <!-- LEADERBOARD SCREEN -->
+    <div id="leaderboard-screen" class="full-screen-menu hidden">
+        <h2 data-i18n="lbl_leaderboard">Leaderboard</h2>
+        <div class="glass-panel" style="width: 100%; max-width: 340px; padding: 10px; box-sizing: border-box;">
+            <div style="display: flex; justify-content: space-between; padding: 10px; opacity: 0.6; font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <span data-i18n="lbl_rank">Rank</span>
+                <span data-i18n="lbl_player">Player</span>
+                <span data-i18n="lbl_score">Score</span>
+            </div>
+            <div id="leaderboard-list" style="max-height: 50vh; overflow-y: auto;">
+                <!-- Entries injected here -->
+            </div>
+        </div>
+        <button class="btn-main btn-dark" style="margin-top:20px; width: auto;" onclick="window.showMainMenu()" data-i18n="btn_back">Back</button>
     </div>
 
     <!-- FRIEND MENU -->
@@ -529,6 +549,8 @@
                 msg_qr_mobile_only: "QR Scanner only works in Telegram Mobile.",
                 msg_clear_confirm: "Clear history?",
                 msg_share_text: "Scored {s} pts in GeoGuessr!"
+                lbl_leaderboard: "Leaderboard",
+                lbl_rank: "Rank",
             },
             ru: { 
                 app_title: "ГеоГессср", 
@@ -582,6 +604,8 @@
                 msg_qr_mobile_only: "Сканер работает только в мобильном Telegram.",
                 msg_clear_confirm: "Очистить историю?",
                 msg_share_text: "Я набрал {s} жырчков в ГеоГессср!"
+                lbl_leaderboard: "Таблица лидеров",
+                lbl_rank: "Место",
             }
         };
 
@@ -1318,7 +1342,15 @@
 
             // Save history
             STATE.totalScore += pts; STATE.totalGames++; 
+            // Find this line inside submitGuess:
             localStorage.setItem('geo_total_score', STATE.totalScore.toString());
+            
+            // ADD THIS IMMEDIATELY AFTER:
+            update(ref(db, `leaderboard/${STATE.myUid}`), {
+                name: STATE.myName,
+                score: STATE.totalScore,
+                lastUpdate: Date.now()
+            });
             localStorage.setItem('geo_total_games', STATE.totalGames.toString());
             STATE.history.push({ date: new Date().toLocaleDateString(), pts: pts, loc: STATE.currentLoc.city.name || "Unknown" });
             localStorage.setItem('geo_history', JSON.stringify(STATE.history));
@@ -1463,6 +1495,55 @@
             }
         };
 
+        window.openLeaderboard = () => {
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('leaderboard-screen').classList.remove('hidden');
+            const list = document.getElementById('leaderboard-list');
+            list.innerHTML = '<div style="padding:20px; text-align:center;">Loading...</div>';
+        
+            // Fetch top 50 players
+            get(ref(db, 'leaderboard')).then((snap) => {
+                if (!snap.exists()) {
+                    list.innerHTML = 'No records yet.';
+                    return;
+                }
+        
+                const data = snap.val();
+                // Convert object to array and sort by score descending
+                const players = Object.keys(data).map(uid => ({
+                    uid,
+                    ...data[uid]
+                })).sort((a, b) => b.score - a.score).slice(0, 50);
+        
+                list.innerHTML = '';
+                players.forEach((p, index) => {
+                    const isMe = p.uid === STATE.myUid;
+                    const item = document.createElement('div');
+                    item.style.cssText = `
+                        display: flex; 
+                        justify-content: space-between; 
+                        align-items: center;
+                        padding: 12px 10px;
+                        border-bottom: 1px solid rgba(255,255,255,0.05);
+                        ${isMe ? 'background: rgba(0, 198, 255, 0.1); border-radius: 10px;' : ''}
+                    `;
+                    
+                    // Highlight Top 3
+                    let rankDisplay = index + 1;
+                    if(rankDisplay === 1) rankDisplay = '🥇';
+                    else if(rankDisplay === 2) rankDisplay = '🥈';
+                    else if(rankDisplay === 3) rankDisplay = '🥉';
+        
+                    item.innerHTML = `
+                        <div style="width: 30px; font-weight: 800;">${rankDisplay}</div>
+                        <div style="flex-grow: 1; font-weight: ${isMe ? '700' : '400'};">${p.name} ${isMe ? '(You)' : ''}</div>
+                        <div style="color: #f1c40f; font-weight: 800;">${p.score.toLocaleString()}</div>
+                    `;
+                    list.appendChild(item);
+                });
+            });
+        };
+        
         function formatDist(m) { return m < 1000 ? Math.round(m) + " m" : (m/1000).toFixed(1) + " km"; }
         window.shareResult = () => {
             const msg = t('msg_share_text').replace('{s}', STATE.score);
