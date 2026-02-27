@@ -1040,7 +1040,8 @@
             const bbox = `${rLng-0.005},${rLat-0.005},${rLng+0.005},${rLat+0.005}`;
             
             try {
-                const res = await fetch(`https://graph.mapillary.com/images?access_token=${MLY_TOKEN}&fields=id,geometry&bbox=${bbox}&limit=1`);
+                // We added '&is_pano=true' to the URL
+                const res = await fetch(`https://graph.mapillary.com/images?access_token=${MLY_TOKEN}&fields=id,geometry&is_pano=true&bbox=${bbox}&limit=1`);
                 const data = await res.json();
                 if(data.data && data.data.length > 0) {
                     const cityName = STATE.selectedCountry ? COUNTRY_POOLS[STATE.selectedCountry].name : city.name;
