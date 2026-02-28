@@ -556,7 +556,6 @@
                 lbl_score: "Всего XP",
                 lbl_history: "Исторiя",
 
-                // Standard Russian for missing elements to ensure functionality
                 lbl_loading: "Загрузка...",
                 lbl_select_country: "Выберите страну",
                 lbl_host: "ХОСТ",
@@ -921,6 +920,64 @@
         };
 
         let map, mly, guessMarker, resultLine, resultMarker, oppMarkers = [];
+        
+        // --- BACKGROUND PRELOADING QUEUE ---
+        const PRELOADED_LOCATIONS =[];
+        const TARGET_PRELOAD_COUNT = 15; // Keep 15 ready-to-play panoramas cached in memory
+        let currentPreloadCountry = null;
+
+        // Fetches a single guaranteed-valid Mapillary location
+        async function fetchValidLocation(countryCode) {
+            let pool = LOCATIONS;
+            if (countryCode && COUNTRY_POOLS[countryCode]) {
+                pool = COUNTRY_POOLS[countryCode].cities;
+            }
+
+            const city = pool[Math.floor(Math.random() * pool.length)];
+            
+            // Jitter to make it random (~3km variance)
+            const rLat = city.lat + (Math.random() * 0.06 - 0.03);
+            const rLng = city.lng + (Math.random() * 0.06 - 0.03);
+            
+            // INCREASED bbox size from 0.005 to 0.02 (~4km box). Guarantees much faster hits!
+            const bbox = `${rLng-0.02},${rLat-0.02},${rLng+0.02},${rLat+0.02}`;
+            
+            try {
+                const res = await fetch(`https://graph.mapillary.com/images?access_token=${MLY_TOKEN}&fields=id,geometry&is_pano=true&bbox=${bbox}&limit=1`);
+                const data = await res.json();
+                
+                if (data.data && data.data.length > 0) {
+                    const cityName = countryCode ? COUNTRY_POOLS[countryCode].name : city.name;
+                    const cityFlag = countryCode ? COUNTRY_POOLS[countryCode].flag : (city.flag || "");
+                    
+                    return { 
+                        id: data.data[0].id, 
+                        lat: data.data[0].geometry.coordinates[1], 
+                        lng: data.data[0].geometry.coordinates[0], 
+                        city: { name: cityName, flag: cityFlag } 
+                    };
+                }
+            } catch(e) { /* Fail silently, loop will retry */ }
+            return null;
+        }
+
+        // Silent background worker loop
+        async function runPreloader() {
+            while (true) {
+                if (PRELOADED_LOCATIONS.length < TARGET_PRELOAD_COUNT) {
+                    const loc = await fetchValidLocation(currentPreloadCountry);
+                    if (loc) {
+                        PRELOADED_LOCATIONS.push(loc);
+                        console.log(`[Preloader] Cached location. Queue size: ${PRELOADED_LOCATIONS.length}`);
+                    }
+                    // Wait 200ms to avoid slamming the API rate limits
+                    await new Promise(r => setTimeout(r, 200));
+                } else {
+                    // Queue is full, sleep and check again in a second
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+            }
+        }
 
         function init() {
             map = L.map('map', { zoomControl: false }).setView([20, 0], 2);
@@ -942,6 +999,10 @@
 
             applyTranslations();
             renderCountryGrid();
+            
+            // Start the preloader IMMEDIATELY
+            runPreloader();
+
             document.getElementById('loading').classList.add('hidden');
             document.getElementById('main-menu').classList.remove('hidden');
         }
@@ -963,7 +1024,15 @@
             document.body.classList.remove('game-active');
             document.querySelectorAll('.full-screen-menu').forEach(el => el.classList.add('hidden'));
             document.getElementById('main-menu').classList.remove('hidden');
-            STATE.selectedCountry = null; // Reset country
+            
+            // Reset country back to global and clear queue if needed
+            if (STATE.selectedCountry !== null) {
+                STATE.selectedCountry = null;
+                if (currentPreloadCountry !== null) {
+                    currentPreloadCountry = null;
+                    PRELOADED_LOCATIONS.length = 0; // Wipe specific queue to start global preloading
+                }
+            }
         };
 
         // --- COUNTRY MODE UI ---
@@ -980,10 +1049,17 @@
                 const div = document.createElement('div');
                 div.className = 'country-card';
                 div.innerHTML = `<span class="c-flag">${c.flag}</span><span class="c-name">${c.name}</span>`;
+                
                 div.onclick = () => {
                     document.querySelectorAll('.country-card').forEach(el => el.classList.remove('selected'));
                     div.classList.add('selected');
                     STATE.selectedCountry = code;
+                    
+                    // Switch Preloader target to this country immediately!
+                    if (currentPreloadCountry !== code) {
+                        currentPreloadCountry = code;
+                        PRELOADED_LOCATIONS.length = 0; // Dump old global queue
+                    }
                 };
                 grid.appendChild(div);
             });
@@ -1025,42 +1101,29 @@
             }
         }
 
-        // --- LOCATION PICKER ---
+        // Gets location FAST by utilizing the preloaded queue
         async function pickRandomLocation() {
-            let pool = LOCATIONS; // Default global
-            if (STATE.selectedCountry && COUNTRY_POOLS[STATE.selectedCountry]) {
-                pool = COUNTRY_POOLS[STATE.selectedCountry].cities; // Use country pool
+            const requiredCountry = STATE.mode === 'multi' ? null : STATE.selectedCountry; 
+            
+            // If the cache matches what we need, pop it and load INSTANTLY!
+            if (PRELOADED_LOCATIONS.length > 0 && currentPreloadCountry === requiredCountry) {
+                return PRELOADED_LOCATIONS.shift(); 
             }
 
-            const city = pool[Math.floor(Math.random() * pool.length)];
-            
-            // Just use the city coordinate directly with slight jitter
-            const rLat = city.lat + (Math.random() * 0.02 - 0.01);
-            const rLng = city.lng + (Math.random() * 0.02 - 0.01);
-            const bbox = `${rLng-0.005},${rLat-0.005},${rLng+0.005},${rLat+0.005}`;
-            
-            try {
-                // We added '&is_pano=true' to the URL
-                const res = await fetch(`https://graph.mapillary.com/images?access_token=${MLY_TOKEN}&fields=id,geometry&is_pano=true&bbox=${bbox}&limit=1`);
-                const data = await res.json();
-                if(data.data && data.data.length > 0) {
-                    const cityName = STATE.selectedCountry ? COUNTRY_POOLS[STATE.selectedCountry].name : city.name;
-                    const cityFlag = STATE.selectedCountry ? COUNTRY_POOLS[STATE.selectedCountry].flag : (city.flag || "");
-                    
-                    return { 
-                        id: data.data[0].id, 
-                        lat: data.data[0].geometry.coordinates[1], 
-                        lng: data.data[0].geometry.coordinates[0], 
-                        city: { name: cityName, flag: cityFlag } 
-                    };
-                } else return pickRandomLocation(); 
-            } catch(e) { return pickRandomLocation(); }
+            // Fallback: If queue is somehow empty (e.g. user taps too fast), fetch one now.
+            let loc = null;
+            while(!loc) {
+                loc = await fetchValidLocation(requiredCountry);
+                if(!loc) await new Promise(r => setTimeout(r, 300));
+            }
+            return loc;
         }
 
         function startGameLoop() {
             resetMapUI();
             if (STATE.mode !== 'multi') {
                 document.getElementById('loading').classList.remove('hidden');
+                // The Promise resolves almost instantly now!
                 pickRandomLocation().then(loc => {
                     STATE.currentLoc = loc;
                     loadLocation(loc);
@@ -1088,7 +1151,7 @@
             if(resultLine) map.removeLayer(resultLine);
             if(resultMarker) map.removeLayer(resultMarker);
             oppMarkers.forEach(m => map.removeLayer(m));
-            oppMarkers = [];
+            oppMarkers =[];
             
             guessMarker = null; 
             map.setView([20,0], 2);
@@ -1176,7 +1239,6 @@
             });
         }
 
-        // --- QR CODE SCANNER ---
         window.scanQR = () => {
             if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.showScanQrPopup) {
                 window.Telegram.WebApp.showScanQrPopup({ text: t('msg_qr_popup') }, (data) => {
@@ -1200,13 +1262,8 @@
             document.getElementById('lobby-screen').classList.remove('hidden');
             document.getElementById('lobby-code-display').innerText = code;
             
-            // Generate QR Display
             document.getElementById('lobby-qr-container').innerHTML = "";
-            new QRCode(document.getElementById('lobby-qr-container'), {
-                text: code,
-                width: 128,
-                height: 128
-            });
+            new QRCode(document.getElementById('lobby-qr-container'), { text: code, width: 128, height: 128 });
 
             if(STATE.mpRole === 'host') document.getElementById('host-actions').classList.remove('hidden');
             listenToLobby(code);
@@ -1317,7 +1374,6 @@
 
             if(window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
 
-            // Save history
             STATE.totalScore += pts; STATE.totalGames++; 
             localStorage.setItem('geo_total_score', STATE.totalScore.toString());
             localStorage.setItem('geo_total_games', STATE.totalGames.toString());
@@ -1387,7 +1443,6 @@
                  nextBtn.disabled = false;
                  nextBtn.querySelector('.btn-content').innerText = t('btn_next');
                  nextBtn.onclick = window.nextRound;
-                 // Update scores in DB
                  get(ref(db, `games/${STATE.gameId}/players`)).then(snap => {
                     const p = snap.val();
                     Object.keys(guesses).forEach(uid => { if(p[uid]) p[uid].score += guesses[uid].pts; });
@@ -1408,7 +1463,7 @@
             resultMarker = L.circleMarker(aLat, { radius: 8, color: '#fff', fillColor: '#00ff00', fillOpacity: 1 }).addTo(map);
             resultLine = L.polyline([uLat, aLat], { color: '#00C6FF', weight: 4 }).addTo(map);
             const group = new L.featureGroup([L.marker(uLat), resultMarker]);
-            map.fitBounds(group.getBounds(), { padding: [50, 50], maxZoom: 16 });
+            map.fitBounds(group.getBounds(), { padding:[50, 50], maxZoom: 16 });
         }
 
         window.nextRound = () => {
