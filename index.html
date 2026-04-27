@@ -21,6 +21,8 @@
     <!-- External Libs -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://unpkg.com/mapillary-js@4.1.0/dist/mapillary.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
     <!-- QR Code Generator -->
@@ -316,10 +318,14 @@
             <span class="btn-content" data-i18n="btn_endless">∞ Endless Mode</span>
             <div class="btn-spinner"></div>
         </button>
-        <button class="btn-main btn-orange" onclick="window.startChallenge()">
-            <span class="btn-content" data-i18n="btn_challenge">⏱️ Challenge Mode</span>
+        <button class="btn-main btn-dark" onclick="window.startHistoricalMode()">
+            <span class="btn-content">🕰️ Date & Location Mode</span>
             <div class="btn-spinner"></div>
         </button>
+        <!--<button class="btn-main btn-orange" onclick="window.startChallenge()">
+            <span class="btn-content" data-i18n="btn_challenge">⏱️ Challenge Mode</span>
+            <div class="btn-spinner"></div>
+        </button>-->
         <button class="btn-main btn-purple" onclick="window.openCountryMenu()">
             <span class="btn-content" data-i18n="btn_country">🌍 Country Mode</span>
         </button>
@@ -409,6 +415,7 @@
 
     <!-- GAME HUD -->
     <div id="mly" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:1;"></div>
+    <div id="panorama" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:2; display:none;"></div>
     
     <div id="top-hud">
         <div style="display:flex; flex-direction:column;">
@@ -427,6 +434,10 @@
     <button id="mobile-map-toggle" onclick="window.toggleMap()">🗺️</button>
 
     <div id="map-container">
+        <div id="date-guess-container" class="hidden" style="padding: 10px; background: rgba(0,0,0,0.6); border-radius: 16px; margin-bottom: 8px; display: flex; gap: 10px; align-items: center;">
+            <label style="color:white; font-weight:bold; white-space:nowrap;">Year:</label>
+            <input type="number" id="guess-year" placeholder="e.g. 1945" style="width:100%; padding:10px; border-radius:8px; border:none; outline:none; font-size:16px; font-weight:bold; background: rgba(255,255,255,0.9);">
+        </div>
         <div id="map"></div>
         <button id="confirm-btn" onclick="window.submitGuess()" data-i18n="btn_guess_tap">Tap map to guess</button>
     </div>
@@ -590,7 +601,7 @@
         };
 
         const USER = (window.Telegram?.WebApp?.initDataUnsafe?.user) || { id: 'test_'+Math.floor(Math.random()*1000), first_name: 'Guest', language_code: 'en' };
-        
+        const WORKER_URL = "https://geo-bot.kviappsgames.workers.dev";
         const STATE = {
             lang: localStorage.getItem('geo_lang') || (USER.language_code === 'ru' ? 'ru' : 'en'),
             mode: 'menu', mpRole: null, gameId: null, myUid: USER.id.toString(), myName: USER.first_name,
@@ -598,7 +609,8 @@
             mpModeSelected: 'endless', selectedCountry: null,
             history: JSON.parse(localStorage.getItem('geo_history') || '[]'),
             totalGames: parseInt(localStorage.getItem('geo_total_games') || '0'),
-            totalScore: parseInt(localStorage.getItem('geo_total_score') || '0')
+            totalScore: parseInt(localStorage.getItem('geo_total_score') || '0'),
+            historicalData: null
         };
 
         const LOCATIONS = [
@@ -981,6 +993,45 @@
             }
         }
 
+        window.startHistoricalMode = async () => {
+            document.body.classList.add('game-active');
+            STATE.mode = 'historical'; 
+            STATE.score = 0;
+            updateHUD();
+            document.getElementById('loading').classList.remove('hidden');
+
+            try {
+                // Fetch generated AI Historical Data
+                const res = await fetch(`${WORKER_URL}/api/historical`);
+                const data = await res.json();
+                STATE.historicalData = data;
+
+                // Hide Mapillary, Show Pannellum
+                document.getElementById('mly').style.display = 'none';
+                const panoDiv = document.getElementById('panorama');
+                panoDiv.style.display = 'block';
+                panoDiv.innerHTML = ''; // Clear old viewer
+
+                // Render 360 Image
+                pannellum.viewer('panorama', {
+                    "type": "equirectangular",
+                    "panorama": "data:image/jpeg;base64," + data.image_b64,
+                    "autoLoad": true,
+                    "showControls": false
+                });
+
+                // Setup UI
+                document.getElementById('date-guess-container').classList.remove('hidden');
+                document.getElementById('guess-year').value = '';
+                document.getElementById('loading').classList.add('hidden');
+                resetMapUI();
+
+            } catch (err) {
+                alert("AI Generation failed. Try again!");
+                window.showMainMenu();
+            }
+        };
+        
         // Start 3 workers in parallel immediately
         function startBackgroundSystem() {
             runWorker(1);
@@ -1030,6 +1081,9 @@
         };
 
         window.showMainMenu = () => {
+            document.getElementById('panorama').style.display = 'none';
+            document.getElementById('mly').style.display = 'block';
+            document.getElementById('date-guess-container').classList.add('hidden');
             document.body.classList.remove('game-active');
             document.querySelectorAll('.full-screen-menu').forEach(el => el.classList.add('hidden'));
             document.getElementById('main-menu').classList.remove('hidden');
@@ -1151,6 +1205,7 @@
             } else {
                 document.getElementById('confirm-btn').innerText = t('btn_waiting');
             }
+            
         }
 
         function loadLocation(loc) {
@@ -1161,6 +1216,9 @@
 
         function resetMapUI() {
             STATE.isLocked = false;
+            if (STATE.mode !== 'historical') {
+                document.getElementById('date-guess-container').classList.add('hidden');
+            }
             document.getElementById('result-sheet').classList.remove('show');
             document.getElementById('map-container').classList.remove('map-result-mode', 'open');
             document.getElementById('mobile-map-toggle').style.display = 'flex';
@@ -1387,9 +1445,29 @@
             STATE.isLocked = true;
             
             const uLat = guessMarker ? guessMarker.getLatLng() : L.latLng(0,0);
-            const aLat = L.latLng(STATE.currentLoc.lat, STATE.currentLoc.lng);
-            const dist = map.distance(uLat, aLat);
-            const pts = (force && !guessMarker) ? 0 : Math.round(5000 * Math.exp(-dist / 120000)); 
+            let aLat, dist, pts;
+
+            if (STATE.mode === 'historical') {
+                aLat = L.latLng(STATE.historicalData.lat, STATE.historicalData.lng);
+                dist = map.distance(uLat, aLat);
+                
+                // Calculate Location Score (max 5000)
+                const locPts = (force && !guessMarker) ? 0 : Math.round(5000 * Math.exp(-dist / 120000)); 
+                
+                // Calculate Year Score (max 5000, drops off by 20 points per year off)
+                const guessedYear = parseInt(document.getElementById('guess-year').value) || 0;
+                const actualYear = STATE.historicalData.year;
+                const yearDiff = Math.abs(actualYear - guessedYear);
+                const yearPts = Math.max(0, 5000 - (yearDiff * 20));
+
+                pts = locPts + yearPts;
+                STATE.currentLoc = { city: { name: `Year: ${actualYear} | ${STATE.historicalData.city}`, flag: "⏳" }};
+                
+            } else {
+                aLat = L.latLng(STATE.currentLoc.lat, STATE.currentLoc.lng);
+                dist = map.distance(uLat, aLat);
+                pts = (force && !guessMarker) ? 0 : Math.round(5000 * Math.exp(-dist / 120000)); 
+            }
 
             if(window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
 
