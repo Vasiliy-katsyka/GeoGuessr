@@ -1025,31 +1025,62 @@
             }
         }
 
-        window.startHistoricalMode = async () => {
+        // --- HISTORICAL MODE BACKGROUND PRELOADER ---
+        let preloadedHistoricalPromise = null;
+
+        function preloadHistorical() {
+            preloadedHistoricalPromise = fetch(`${WORKER_URL}/api/historical`)
+                .then(async res => {
+                    if (!res.ok) throw new Error("Server error");
+                    const eventHeader = res.headers.get("X-Event-Data");
+                    const eventData = JSON.parse(decodeURIComponent(eventHeader));
+                    const imageBlob = await res.blob();
+                    const imageUrl = URL.createObjectURL(imageBlob);
+                    return { eventData, imageUrl };
+                })
+                .catch(err => null); // Fail silently in background, will retry on next round
+        }
+
+        // 1. Triggered when clicking "Historical Mode" in Main Menu
+        window.startHistoricalMode = () => {
             document.body.classList.add('game-active');
             STATE.mode = 'historical'; 
-            STATE.score = 0;
+            STATE.score = 0; // Reset score for new game
             updateHUD();
+            startHistoricalRound();
+        };
+
+        // 2. Triggered for every new round
+        async function startHistoricalRound() {
             document.getElementById('loading').classList.remove('hidden');
+            resetMapUI();
 
             try {
-                // Fetch AI Data & Image Blob
-                const res = await fetch(`${WORKER_URL}/api/historical`);
+                let data = null;
+                // Use preloaded background data if it's ready! (Makes loading instant)
+                if (preloadedHistoricalPromise) {
+                    data = await preloadedHistoricalPromise;
+                    preloadedHistoricalPromise = null; 
+                }
                 
-                if (!res.ok) {
-                    const errObj = await res.json();
-                    throw new Error(errObj.error || "Server error");
+                // If no preload is ready (e.g., Round 1), fetch it now
+                if (!data) {
+                    const res = await fetch(`${WORKER_URL}/api/historical`);
+                    if (!res.ok) {
+                        const errObj = await res.json().catch(()=>({}));
+                        throw new Error(errObj.error || "Server error");
+                    }
+                    const eventHeader = res.headers.get("X-Event-Data");
+                    const eventData = JSON.parse(decodeURIComponent(eventHeader));
+                    const imageBlob = await res.blob();
+                    const imageUrl = URL.createObjectURL(imageBlob);
+                    data = { eventData, imageUrl };
                 }
 
-                // Extract JSON data from the Custom Header
-                const eventHeader = res.headers.get("X-Event-Data");
-                if (!eventHeader) throw new Error("Missing Event Data Header from AI");
-                
-                STATE.historicalData = JSON.parse(decodeURIComponent(eventHeader));
+                // Immediately start generating the NEXT round in the background while user plays!
+                preloadHistorical();
 
-                // Convert the raw binary response into a usable Image URL
-                const imageBlob = await res.blob();
-                const imageUrl = URL.createObjectURL(imageBlob);
+                STATE.historicalData = data.eventData;
 
                 // Hide Mapillary, Show Pannellum
                 document.getElementById('mly').style.display = 'none';
@@ -1060,7 +1091,7 @@
                 // Render 360 Image using the Blob URL
                 pannellum.viewer('panorama', {
                     "type": "equirectangular",
-                    "panorama": imageUrl, 
+                    "panorama": data.imageUrl, 
                     "autoLoad": true,
                     "showControls": false
                 });
@@ -1068,28 +1099,24 @@
                 // Setup UI
                 document.getElementById('date-guess-container').classList.remove('hidden');
                 
-                // Initialize Slider
                 const yearSlider = document.getElementById('guess-year');
                 const yearDisplay = document.getElementById('year-display-value');
                 
-                // Set default starting point to a random year in the middle
                 yearSlider.value = 1000; 
                 yearDisplay.innerText = yearSlider.value;
                 
-                // Live update the number as the user drags
                 yearSlider.oninput = function() {
                     yearDisplay.innerText = this.value;
                 };
 
                 document.getElementById('loading').classList.add('hidden');
-                resetMapUI();
 
             } catch (err) {
                 console.error("Historical Error:", err);
                 alert("AI Generation failed. Try again! Error: " + err.message);
                 window.showMainMenu();
             }
-        };
+        }
         
         // Start 3 workers in parallel immediately
         function startBackgroundSystem() {
@@ -1629,6 +1656,9 @@
             if(STATE.mode === 'endless' || STATE.mode === 'challenge') {
                 if(STATE.mode === 'challenge') STATE.round++;
                 startGameLoop();
+            } else if (STATE.mode === 'historical') {
+                // ADDED THIS: Now it knows what to do for Historical Mode!
+                startHistoricalRound();
             } else if (STATE.mode === 'multi' && STATE.mpRole === 'host') {
                 const nextR = STATE.round + 1;
                 update(ref(db, `games/${STATE.gameId}`), {
