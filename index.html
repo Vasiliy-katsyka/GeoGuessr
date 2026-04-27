@@ -282,6 +282,35 @@
             background: #050505; z-index: 8000;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
+
+        /* ==================== PREMIUM SLIDER ==================== */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            margin: 10px 0;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 8px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 24px; width: 24px;
+            border-radius: 50%;
+            background: var(--primary-grad);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -8px;
+            box-shadow: 0 0 15px rgba(0, 198, 255, 0.8);
+            border: 2px solid white;
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:active {
+            transform: scale(1.2);
+        }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
@@ -434,9 +463,12 @@
     <button id="mobile-map-toggle" onclick="window.toggleMap()">🗺️</button>
 
     <div id="map-container">
-        <div id="date-guess-container" class="hidden" style="padding: 10px; background: rgba(0,0,0,0.6); border-radius: 16px; margin-bottom: 8px; display: flex; gap: 10px; align-items: center;">
-            <label style="color:white; font-weight:bold; white-space:nowrap;">Year:</label>
-            <input type="number" id="guess-year" placeholder="e.g. 1945" style="width:100%; padding:10px; border-radius:8px; border:none; outline:none; font-size:16px; font-weight:bold; background: rgba(255,255,255,0.9);">
+        <div id="date-guess-container" class="hidden" style="padding: 15px; background: rgba(0,0,0,0.6); backdrop-filter: blur(15px); border-radius: 20px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 10px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+            <div style="display: flex; justify-content: space-between; color: white; font-weight: 800; font-size: 1.1rem;">
+                <span style="opacity: 0.8;">Guess the Year:</span>
+                <span id="year-display-value" style="color: #00C6FF;">1000</span>
+            </div>
+            <input type="range" id="guess-year" min="-1000" max="2026" value="1000" step="1">
         </div>
         <div id="map"></div>
         <button id="confirm-btn" onclick="window.submitGuess()" data-i18n="btn_guess_tap">Tap map to guess</button>
@@ -1035,7 +1067,20 @@
 
                 // Setup UI
                 document.getElementById('date-guess-container').classList.remove('hidden');
-                document.getElementById('guess-year').value = '';
+                
+                // Initialize Slider
+                const yearSlider = document.getElementById('guess-year');
+                const yearDisplay = document.getElementById('year-display-value');
+                
+                // Set default starting point to a random year in the middle
+                yearSlider.value = 1000; 
+                yearDisplay.innerText = yearSlider.value;
+                
+                // Live update the number as the user drags
+                yearSlider.oninput = function() {
+                    yearDisplay.innerText = this.value;
+                };
+
                 document.getElementById('loading').classList.add('hidden');
                 resetMapUI();
 
