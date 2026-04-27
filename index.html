@@ -1001,10 +1001,23 @@
             document.getElementById('loading').classList.remove('hidden');
 
             try {
-                // Fetch generated AI Historical Data
+                // Fetch AI Data & Image Blob
                 const res = await fetch(`${WORKER_URL}/api/historical`);
-                const data = await res.json();
-                STATE.historicalData = data;
+                
+                if (!res.ok) {
+                    const errObj = await res.json();
+                    throw new Error(errObj.error || "Server error");
+                }
+
+                // Extract JSON data from the Custom Header
+                const eventHeader = res.headers.get("X-Event-Data");
+                if (!eventHeader) throw new Error("Missing Event Data Header from AI");
+                
+                STATE.historicalData = JSON.parse(decodeURIComponent(eventHeader));
+
+                // Convert the raw binary response into a usable Image URL
+                const imageBlob = await res.blob();
+                const imageUrl = URL.createObjectURL(imageBlob);
 
                 // Hide Mapillary, Show Pannellum
                 document.getElementById('mly').style.display = 'none';
@@ -1012,10 +1025,10 @@
                 panoDiv.style.display = 'block';
                 panoDiv.innerHTML = ''; // Clear old viewer
 
-                // Render 360 Image
+                // Render 360 Image using the Blob URL
                 pannellum.viewer('panorama', {
                     "type": "equirectangular",
-                    "panorama": "data:image/jpeg;base64," + data.image_b64,
+                    "panorama": imageUrl, 
                     "autoLoad": true,
                     "showControls": false
                 });
@@ -1027,7 +1040,8 @@
                 resetMapUI();
 
             } catch (err) {
-                alert("AI Generation failed. Try again!");
+                console.error("Historical Error:", err);
+                alert("AI Generation failed. Try again! Error: " + err.message);
                 window.showMainMenu();
             }
         };
