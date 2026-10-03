@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#0b0f17">
     <title>GeoGuessr</title>
 
     <!-- Telegram Web App -->
@@ -16,11 +15,11 @@
             try {
                 tg.ready();
                 tg.expand();
-                // Fullscreen only makes sense on phones; on desktop it would take over the whole window.
+                // Fullscreen only on phones; on desktop it would take over the whole window.
                 if (['android', 'ios'].includes(tg.platform) && v('8.0')) tg.requestFullscreen();
                 if (v('7.7')) tg.disableVerticalSwipes();
-                if (v('6.1')) { tg.setHeaderColor('#0b0f17'); tg.setBackgroundColor('#0b0f17'); }
-                if (v('7.10')) tg.setBottomBarColor('#0b0f17');
+                if (v('6.1')) { tg.setHeaderColor('secondary_bg_color'); tg.setBackgroundColor('secondary_bg_color'); }
+                if (v('7.10')) tg.setBottomBarColor('secondary_bg_color');
             } catch (e) { console.log('Telegram init failed', e); }
         })();
     </script>
@@ -33,546 +32,376 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
     <style>
-        /* ==================== TOKENS ==================== */
+        /* ==================== THEME ====================
+           Everything follows the user's Telegram theme (--tg-theme-* is set by telegram-web-app.js).
+           The --fb-* values are only used when opened outside Telegram. */
         :root {
-            --bg: #0b0f17;
-            --surface: #141a26;
-            --surface-2: #1c2433;
-            --surface-3: #252f42;
-            --border: rgba(255, 255, 255, 0.08);
-            --text: #f5f7fb;
-            --muted: #8b95a8;
-            --primary: #3b82f6;
-            --primary-2: #2563eb;
-            --primary-grad: linear-gradient(135deg, #4f8cff 0%, #2563eb 100%);
-            --green: #22c55e;
-            --gold: #fbbf24;
-            --red: #ef4444;
-            --purple: #8b5cf6;
-            --radius: 20px;
-            --radius-sm: 14px;
+            --fb-bg: #ffffff; --fb-sec: #efeff4; --fb-text: #000000; --fb-hint: #8e8e93;
+            --fb-link: #2481cc; --fb-btn: #2481cc; --fb-btn-text: #ffffff;
+            --fb-sep: rgba(60, 60, 67, 0.2); --fb-destr: #e53935;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --fb-bg: #1c1c1d; --fb-sec: #000000; --fb-text: #ffffff; --fb-hint: #98989e;
+                --fb-link: #3e88f7; --fb-btn: #3e88f7; --fb-sep: rgba(84, 84, 88, 0.6); --fb-destr: #eb5545;
+            }
+        }
+        :root {
+            --bg: var(--tg-theme-secondary-bg-color, var(--fb-sec));
+            --section: var(--tg-theme-section-bg-color, var(--tg-theme-bg-color, var(--fb-bg)));
+            --text: var(--tg-theme-text-color, var(--fb-text));
+            --hint: var(--tg-theme-hint-color, var(--fb-hint));
+            --link: var(--tg-theme-link-color, var(--fb-link));
+            --accent: var(--tg-theme-button-color, var(--fb-btn));
+            --accent-text: var(--tg-theme-button-text-color, var(--fb-btn-text));
+            --section-header: var(--tg-theme-section-header-text-color, var(--hint));
+            --subtitle: var(--tg-theme-subtitle-text-color, var(--hint));
+            --destructive: var(--tg-theme-destructive-text-color, var(--fb-destr));
+            --sep: var(--tg-theme-section-separator-color, var(--fb-sep));
+            --press: rgba(127, 127, 127, 0.14);
 
-            /* Telegram fullscreen exposes its own safe-area vars; fall back to the device's. */
             --safe-top: calc(max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px)) + var(--tg-content-safe-area-inset-top, 0px));
             --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px));
+            --mb-space: 0px; /* room for the in-page main button when running outside Telegram */
         }
+        body.mb-fb { --mb-space: calc(66px + var(--safe-bottom)); }
 
         * { box-sizing: border-box; }
-
         html, body {
             margin: 0; padding: 0; height: 100%;
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
-            background: var(--bg); color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            font-size: 17px; background: var(--bg); color: var(--text);
             overflow: hidden; overscroll-behavior: none;
-            -webkit-tap-highlight-color: transparent;
-            -webkit-font-smoothing: antialiased;
+            -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;
         }
-
         button { font: inherit; color: inherit; }
         svg { flex-shrink: 0; }
         .hidden { display: none !important; }
 
-        /* ==================== BUTTONS ==================== */
-        .btn {
-            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-            min-height: 52px; padding: 0 20px;
-            border: none; border-radius: var(--radius-sm);
-            font-size: 16px; font-weight: 700; cursor: pointer;
-            transition: transform 0.12s ease, opacity 0.2s, background 0.2s;
-            user-select: none; -webkit-user-select: none;
-        }
-        .btn:active:not(:disabled) { transform: scale(0.97); }
-        .btn:disabled { cursor: default; }
-        .btn-block { width: 100%; }
-        .btn-primary { background: var(--primary-grad); color: #fff; box-shadow: 0 8px 24px rgba(37, 99, 235, 0.35); }
-        .btn-primary:disabled { background: var(--surface-3); color: var(--muted); box-shadow: none; }
-        .btn-green { background: linear-gradient(135deg, #34d399 0%, #16a34a 100%); color: #fff; box-shadow: 0 8px 24px rgba(22, 163, 74, 0.3); }
-        .btn-soft { background: var(--surface-2); color: var(--text); }
-        .btn-ghost { background: transparent; color: var(--muted); }
-        .btn-danger-soft { background: rgba(239, 68, 68, 0.12); color: #f87171; }
-
-        .icon-btn {
-            width: 42px; height: 42px; border-radius: 50%;
-            display: inline-flex; align-items: center; justify-content: center;
-            border: none; background: var(--surface-2); color: var(--text); cursor: pointer;
-            transition: transform 0.12s;
-        }
-        .icon-btn:active { transform: scale(0.92); }
-
-        .chip {
-            display: inline-flex; align-items: center; gap: 6px;
-            height: 34px; padding: 0 14px; border-radius: 999px;
-            border: 1px solid var(--border); background: var(--surface-2);
-            font-size: 13px; font-weight: 700; cursor: pointer;
-        }
-
-        .spinner {
-            width: 20px; height: 20px; border-radius: 50%;
-            border: 3px solid rgba(255, 255, 255, 0.3); border-top-color: #fff;
-            animation: spin 0.8s linear infinite; display: none;
-        }
-        .btn.loading .btn-label, .btn.loading > svg { display: none; }
-        .btn.loading .spinner { display: block; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        .glass {
-            background: rgba(11, 15, 23, 0.62);
-            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-        }
-
-        /* ==================== SCREENS ==================== */
+        /* ==================== SCREENS & LISTS ==================== */
         .screen {
-            position: fixed; inset: 0; z-index: 5000;
-            background: var(--bg);
+            position: fixed; inset: 0; z-index: 5000; background: var(--bg);
             overflow-y: auto; -webkit-overflow-scrolling: touch;
-            padding: calc(var(--safe-top) + 12px) 16px calc(var(--safe-bottom) + 24px);
-            animation: fadeIn 0.25s ease;
+            padding: calc(var(--safe-top) + 8px) 16px calc(var(--safe-bottom) + var(--mb-space) + 24px);
         }
-        .screen.has-footer { padding-bottom: calc(var(--safe-bottom) + 170px); }
-        .container { max-width: 480px; margin: 0 auto; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+        .wrap { max-width: 520px; margin: 0 auto; }
 
-        .topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; min-height: 42px; }
-        .topbar h2 { margin: 0; font-size: 22px; font-weight: 800; flex: 1; }
+        .page-title { font-size: 28px; font-weight: 700; margin: 8px 4px 4px; letter-spacing: -0.3px; }
+        .page-sub { color: var(--hint); font-size: 15px; margin: 0 4px 6px; }
 
-        .section-title { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 24px 4px 10px; }
+        .section-header { font-size: 13px; text-transform: uppercase; color: var(--section-header); padding: 0 16px 7px; margin-top: 24px; letter-spacing: 0.02em; }
+        .section-footer { font-size: 13px; color: var(--hint); padding: 7px 16px 0; line-height: 1.45; }
+        .section { background: var(--section); border-radius: 12px; overflow: hidden; --sep-left: 16px; }
+        .section.icons { --sep-left: 60px; }
 
-        .card {
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: var(--radius); padding: 18px;
+        .row {
+            position: relative; display: flex; align-items: center; gap: 14px;
+            width: 100%; min-height: 48px; padding: 7px 16px;
+            background: none; border: none; text-align: left; cursor: pointer; font-size: 17px; color: var(--text);
         }
-
-        /* ==================== HOME ==================== */
-        .home-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
-        .profile-chip {
-            display: flex; align-items: center; gap: 10px; min-width: 0;
-            background: none; border: none; padding: 0; cursor: pointer; text-align: left;
+        .row + .row::before {
+            content: ""; position: absolute; top: 0; right: 0; left: var(--sep-left);
+            height: 1px; transform: scaleY(0.5); transform-origin: top; background: var(--sep);
         }
+        button.row:active, .row.tap:active { background: var(--press); }
+        .row-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; }
+        .row-body { flex: 1; min-width: 0; }
+        .row-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .row-sub { font-size: 14px; color: var(--subtitle); margin-top: 1px; line-height: 1.3; }
+        .row-value { color: var(--hint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .row .chev { color: var(--hint); opacity: 0.55; }
+        .row.link { color: var(--link); }
+        .row.destructive { color: var(--destructive); justify-content: center; }
+        .row .check { color: var(--link); visibility: hidden; }
+        .row.selected .check { visibility: visible; }
+        .row-flag { font-size: 26px; width: 30px; text-align: center; line-height: 1; }
+        .pts { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
         .avatar {
-            width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
-            background: var(--primary-grad); color: #fff;
-            display: flex; align-items: center; justify-content: center;
-            font-weight: 800; font-size: 18px; overflow: hidden;
+            width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0; overflow: hidden;
+            background: linear-gradient(135deg, #72d5fd, #2a9ef1); color: #fff;
+            display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 18px;
         }
         .avatar img { width: 100%; height: 100%; object-fit: cover; }
-        .avatar.lg { width: 84px; height: 84px; font-size: 34px; }
-        .avatar.sm { width: 34px; height: 34px; font-size: 14px; }
-        .hello { font-size: 13px; color: var(--muted); }
-        .hello-name { font-size: 17px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .avatar.xl { width: 96px; height: 96px; font-size: 40px; }
+        .avatar.sm { width: 32px; height: 32px; font-size: 14px; }
+        .avatar.c1 { background: linear-gradient(135deg, #ff885e, #ff516a); }
+        .avatar.c2 { background: linear-gradient(135deg, #ffcd6a, #ffa85c); }
+        .avatar.c3 { background: linear-gradient(135deg, #82b1ff, #665fff); }
+        .avatar.c4 { background: linear-gradient(135deg, #a0de7e, #54cb68); }
+        .avatar.c5 { background: linear-gradient(135deg, #53edd6, #28c9b7); }
+        .avatar.c6 { background: linear-gradient(135deg, #e0a2f3, #d669ed); }
 
-        .hero {
-            position: relative; overflow: hidden;
-            border-radius: 26px; padding: 22px;
-            background: radial-gradient(120% 120% at 100% 0%, #60a5fa 0%, #2563eb 45%, #1e3a8a 100%);
-            box-shadow: 0 20px 50px rgba(37, 99, 235, 0.3);
-        }
-        .hero-lottie { position: absolute; right: -6px; top: -6px; width: 120px; height: 120px; pointer-events: none; }
-        .hero-tag { display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; background: rgba(255,255,255,0.18); padding: 5px 10px; border-radius: 999px; }
-        .hero h1 { font-size: 30px; line-height: 1.1; margin: 14px 0 8px; font-weight: 900; max-width: 70%; }
-        .hero p { margin: 0 0 20px; color: rgba(255,255,255,0.85); font-size: 15px; line-height: 1.4; max-width: 85%; }
-        .hero .btn { background: #fff; color: #1d4ed8; box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
+        .bar { height: 6px; border-radius: 3px; background: var(--press); overflow: hidden; }
+        .bar > div { height: 100%; width: 0; border-radius: 3px; background: var(--accent); transition: width 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); }
 
-        .mode-list { display: flex; flex-direction: column; gap: 10px; }
-        .mode-card {
-            display: flex; align-items: center; gap: 14px; width: 100%;
-            padding: 16px; border-radius: var(--radius);
-            background: var(--surface); border: 1px solid var(--border);
-            cursor: pointer; text-align: left; transition: transform 0.12s, background 0.2s;
-        }
-        .mode-card:active { transform: scale(0.98); background: var(--surface-2); }
-        .mode-icon { width: 50px; height: 50px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0; }
-        .mode-text { flex: 1; min-width: 0; }
-        .mode-title { font-size: 17px; font-weight: 800; }
-        .mode-desc { font-size: 13px; color: var(--muted); margin-top: 3px; line-height: 1.35; }
-        .chev { color: var(--muted); }
-
-        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 14px 10px; text-align: center; }
-        .stat-val { font-size: 20px; font-weight: 900; font-variant-numeric: tabular-nums; }
-        .stat-lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
-
-        .how { display: flex; flex-direction: column; gap: 14px; }
-        .how-step { display: flex; gap: 12px; align-items: center; font-size: 14px; color: #cbd2de; }
-        .how-num { width: 28px; height: 28px; border-radius: 50%; background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: var(--primary); flex-shrink: 0; }
+        /* ==================== HOME ==================== */
+        .home-hero { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 6px 0 4px; }
+        .home-hero lottie-player { width: 110px; height: 110px; }
+        .home-hero .page-title { margin-top: 2px; }
 
         /* ==================== COUNTRY ==================== */
-        .search {
-            display: flex; align-items: center; gap: 10px;
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: var(--radius-sm); padding: 0 14px; height: 48px; margin-bottom: 14px; color: var(--muted);
-        }
-        .search input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-size: 16px; min-width: 0; }
-        #country-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        .country-card {
-            position: relative;
-            background: var(--surface); border: 2px solid transparent;
-            border-radius: 18px; padding: 14px 6px 12px; text-align: center;
-            cursor: pointer; transition: transform 0.12s, border-color 0.15s, background 0.15s;
-        }
-        .country-card:active { transform: scale(0.95); }
-        .country-card.selected { border-color: var(--primary); background: rgba(59, 130, 246, 0.14); }
-        .country-card.selected::after {
-            content: "✓"; position: absolute; top: 6px; right: 8px;
-            width: 20px; height: 20px; border-radius: 50%; background: var(--primary);
-            font-size: 12px; font-weight: 900; line-height: 20px; color: #fff;
-        }
-        .c-flag { font-size: 36px; display: block; line-height: 1.1; }
-        .c-name { font-size: 13px; font-weight: 600; color: #d6dbe5; margin-top: 6px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .empty { text-align: center; color: var(--muted); padding: 30px 10px; font-size: 14px; }
+        .segmented { display: grid; grid-template-columns: 1fr 1fr; padding: 2px; border-radius: 9px; background: var(--press); margin: 4px 0 12px; }
+        .segmented button { height: 34px; border: none; background: none; border-radius: 7px; font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text); }
+        .segmented button.active { background: var(--section); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+        .search { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 10px; border-radius: 10px; background: var(--press); color: var(--hint); margin-bottom: 4px; }
+        .search input { flex: 1; min-width: 0; border: none; outline: none; background: none; color: var(--text); font-size: 17px; }
+        .search input::placeholder { color: var(--hint); }
+        .empty { text-align: center; color: var(--hint); padding: 24px 16px; font-size: 15px; }
 
-        .footer-bar {
-            position: fixed; left: 0; right: 0; bottom: 0; z-index: 5100;
-            padding: 14px 16px calc(var(--safe-bottom) + 14px);
-            background: linear-gradient(180deg, rgba(11,15,23,0) 0%, var(--bg) 22%);
-        }
-        .footer-bar .container { display: flex; flex-direction: column; gap: 10px; }
-
-        .segmented { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px; }
-        .segmented button {
-            height: 40px; border: none; background: none; border-radius: 10px;
-            font-size: 14px; font-weight: 700; color: var(--muted); cursor: pointer;
-            display: flex; align-items: center; justify-content: center; gap: 6px;
-        }
-        .segmented button.active { background: var(--surface-3); color: var(--text); }
-
-        /* ==================== PARTY ==================== */
-        .party-card { display: flex; flex-direction: column; gap: 14px; }
-        .party-head { display: flex; align-items: center; gap: 14px; }
-        .party-head h3 { margin: 0; font-size: 18px; }
-        .party-head p { margin: 3px 0 0; font-size: 13px; color: var(--muted); }
+        /* ==================== PARTY & LOBBY ==================== */
         .code-input {
-            width: 100%; height: 64px; text-align: center;
-            font-size: 30px; font-weight: 900; letter-spacing: 0.4em; padding-left: 0.4em;
-            background: var(--bg); color: var(--text);
-            border: 2px solid var(--border); border-radius: var(--radius-sm); outline: none;
-            font-variant-numeric: tabular-nums; transition: border-color 0.2s;
+            width: 100%; border: none; outline: none; background: none; color: var(--text);
+            text-align: center; font-size: 32px; font-weight: 600; letter-spacing: 0.35em; padding: 14px 0 14px 0.35em;
+            font-variant-numeric: tabular-nums;
         }
-        .code-input:focus { border-color: var(--primary); }
-        .code-input::placeholder { color: #3a4458; }
-        .divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
-        .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
-
-        /* ==================== LOBBY ==================== */
-        .lobby-code-card { text-align: center; }
-        .lobby-label { font-size: 13px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
-        #lobby-code-display { font-size: 48px; font-weight: 900; letter-spacing: 0.18em; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
-        #lobby-qr-container { display: inline-block; margin: 12px auto 10px; padding: 12px; background: #fff; border-radius: 18px; line-height: 0; }
-        #lobby-qr-container img, #lobby-qr-container canvas { width: 150px !important; height: 150px !important; }
-        .lobby-hint { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
-        .row { display: flex; gap: 10px; }
-        .row > * { flex: 1; }
-        #player-list { display: flex; flex-direction: column; gap: 8px; }
-        .player-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; }
-        .player-name { flex: 1; font-weight: 600; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .badge { font-size: 11px; font-weight: 800; padding: 4px 8px; border-radius: 999px; background: rgba(251, 191, 36, 0.15); color: var(--gold); text-transform: uppercase; }
-        .badge.you { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
-        .waiting-note { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: 14px; height: 52px; }
-        .pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--green); animation: pulse 1.4s infinite; }
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.6); } 100% { box-shadow: 0 0 0 12px rgba(34,197,94,0); } }
+        .code-input::placeholder { color: var(--hint); opacity: 0.5; }
+        .lobby-card { display: flex; flex-direction: column; align-items: center; padding: 18px 16px 16px; text-align: center; }
+        .lobby-label { font-size: 13px; color: var(--hint); text-transform: uppercase; letter-spacing: 0.04em; }
+        #lobby-code-display { font-size: 42px; font-weight: 700; letter-spacing: 0.15em; padding-left: 0.15em; margin: 2px 0 12px; font-variant-numeric: tabular-nums; }
+        #lobby-qr-container { padding: 10px; background: #fff; border-radius: 12px; line-height: 0; }
+        #lobby-qr-container img, #lobby-qr-container canvas { width: 160px !important; height: 160px !important; }
+        .tag { font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: var(--press); color: var(--hint); }
+        .tag.accent { color: var(--link); }
+        .waiting { display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: #34c759; animation: blink 1.2s infinite; }
+        @keyframes blink { 50% { opacity: 0.3; } }
 
         /* ==================== PROFILE ==================== */
-        .profile-top { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; margin-bottom: 8px; }
-        .profile-top h3 { margin: 4px 0 0; font-size: 22px; }
-        .level-card { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
-        .level-row { display: flex; justify-content: space-between; align-items: baseline; }
-        .level-row b { font-size: 18px; }
-        .level-row span { font-size: 13px; color: var(--muted); }
-        .bar { height: 10px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
-        .bar > div { height: 100%; width: 0; border-radius: 999px; background: var(--primary-grad); transition: width 0.9s cubic-bezier(0.2, 0.8, 0.2, 1); }
-        .bar.gold > div { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
-        #history-list { display: flex; flex-direction: column; }
-        .history-item { display: flex; align-items: center; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--border); }
-        .history-item:last-child { border-bottom: none; }
-        .history-main { flex: 1; min-width: 0; }
-        .history-loc { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .history-date { font-size: 12px; color: var(--muted); margin-top: 2px; }
-        .pts { font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .profile-head { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 10px 0 0; }
+        .profile-head h2 { margin: 12px 0 2px; font-size: 24px; font-weight: 700; }
+        .profile-head .page-sub { margin: 0; }
 
-        /* ==================== GAME: STREET VIEW & HUD ==================== */
+        /* ==================== GAME ==================== */
         #mly { position: fixed; inset: 0; z-index: 1; background: #000; }
 
         #hud {
-            position: fixed; left: 0; right: 0; top: calc(var(--safe-top) + 10px); z-index: 260;
-            padding: 0 12px; pointer-events: none; display: none;
+            position: fixed; left: 0; right: 0; top: calc(var(--safe-top) + 8px); z-index: 260;
+            padding: 0 10px; display: none; pointer-events: none;
         }
         body.game-active #hud { display: block; }
         .hud-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
         .hud-row > * { pointer-events: auto; }
-        #exit-btn { width: 44px; height: 44px; background: rgba(11,15,23,0.62); }
-        .hud-center { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-        .hud-pill { padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 700; text-align: center; white-space: nowrap; }
-        #mode-label { display: block; font-size: 11px; color: rgba(255,255,255,0.65); font-weight: 600; }
-        #timer-box { font-size: 18px; font-weight: 900; font-variant-numeric: tabular-nums; padding: 6px 16px; }
-        #timer-box.warn { color: #fff; background: rgba(239, 68, 68, 0.85); border-color: rgba(255,255,255,0.3); animation: throb 1s infinite; }
-        @keyframes throb { 50% { transform: scale(1.06); } }
-        #score-box { display: flex; flex-direction: column; align-items: flex-end; padding: 6px 14px; border-radius: 16px; cursor: pointer; min-width: 74px; }
-        .hud-score-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255,255,255,0.65); }
-        #score-me { font-size: 18px; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; }
-        #mp-scores {
-            pointer-events: auto; margin: 8px 0 0 auto; width: 170px; padding: 8px 10px; border-radius: 14px;
-            display: flex; flex-direction: column; gap: 4px; font-size: 12px; max-height: 40vh; overflow-y: auto;
+        .pill {
+            background: rgba(0, 0, 0, 0.5); color: #fff; border: none;
+            backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            border-radius: 18px; padding: 7px 13px; font-size: 14px; font-weight: 600; line-height: 1.25;
         }
+        #exit-btn { width: 38px; height: 38px; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .hud-center { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+        #mode-label { display: block; font-size: 12px; font-weight: 500; opacity: 0.75; }
+        #timer-box { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        #timer-box.warn { background: rgba(255, 59, 48, 0.9); }
+        #score-box { text-align: right; cursor: pointer; min-width: 64px; }
+        #score-box small { display: block; font-size: 11px; font-weight: 500; opacity: 0.75; }
+        #score-me { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        #mp-scores { pointer-events: auto; margin: 6px 0 0 auto; width: 160px; display: flex; flex-direction: column; gap: 3px; font-size: 13px; font-weight: 500; max-height: 40vh; overflow-y: auto; }
         #mp-scores.collapsed .mp-row:nth-child(n+4) { display: none; }
         .mp-row { display: flex; justify-content: space-between; gap: 8px; }
         .mp-row span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .mp-row.me { color: #93c5fd; font-weight: 700; }
-        #host-controls { pointer-events: auto; display: flex; justify-content: center; margin-top: 8px; }
-        .chip-danger { background: rgba(239, 68, 68, 0.85); border-color: rgba(255,255,255,0.2); color: #fff; }
+        .mp-row.me { font-weight: 700; }
+        #host-controls { pointer-events: auto; display: flex; justify-content: center; margin-top: 6px; }
+        #host-controls .pill { cursor: pointer; background: rgba(255, 59, 48, 0.85); }
 
-        #guess-fab {
-            position: fixed; z-index: 120; left: 50%; transform: translateX(-50%);
-            bottom: calc(var(--safe-bottom) + 24px);
-            min-height: 58px; padding: 0 30px; border-radius: 999px; font-size: 17px;
-            display: none;
-        }
-        body.game-active #guess-fab:not(.hidden) { display: inline-flex; }
-        #guess-fab:active { transform: translateX(-50%) scale(0.96); }
-
-        /* ==================== MAP SHEET ==================== */
+        /* Map bottom sheet */
         #map-sheet {
             position: fixed; left: 0; right: 0; bottom: 0; z-index: 200;
-            height: 62vh; height: 62dvh;
-            background: var(--surface); border-radius: 26px 26px 0 0;
-            box-shadow: 0 -20px 50px rgba(0,0,0,0.5);
-            display: flex; flex-direction: column; gap: 10px;
-            padding: 8px 12px calc(var(--safe-bottom) + 12px);
-            transform: translateY(105%); transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1), height 0.3s ease;
+            height: 60vh; height: 60dvh;
+            background: var(--section); border-radius: 14px 14px 0 0;
+            box-shadow: 0 -6px 30px rgba(0, 0, 0, 0.25);
+            display: flex; flex-direction: column;
+            padding: 6px 0 var(--mb-space);
+            transform: translateY(105%); transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1), height 0.25s ease;
         }
         #map-sheet.open { transform: translateY(0); }
-        #map-sheet.expanded { height: calc(100vh - var(--safe-top) - 70px); height: calc(100dvh - var(--safe-top) - 70px); }
-        .sheet-grabber { width: 40px; height: 5px; border-radius: 3px; background: var(--surface-3); margin: 0 auto; flex-shrink: 0; }
-        .sheet-head { display: flex; align-items: center; gap: 8px; padding: 0 2px; }
-        .sheet-head .sheet-title { flex: 1; font-size: 17px; font-weight: 800; }
-        .sheet-head .icon-btn { width: 38px; height: 38px; }
-        #map { flex: 1; width: 100%; border-radius: 18px; background: #aad3df; z-index: 0; }
-        #map-sheet.result-mode {
-            top: 0; height: auto; border-radius: 0; padding: 0; gap: 0; z-index: 150;
-            transform: none; transition: none; box-shadow: none;
-        }
-        #map-sheet.result-mode #map { border-radius: 0; }
-        #map-sheet.result-mode .sheet-grabber, #map-sheet.result-mode .sheet-head, #map-sheet.result-mode #confirm-btn { display: none; }
-
+        #map-sheet.expanded { height: calc(100vh - var(--safe-top) - 60px); height: calc(100dvh - var(--safe-top) - 60px); }
+        .grabber { width: 36px; height: 5px; border-radius: 3px; background: var(--hint); opacity: 0.35; margin: 0 auto 4px; flex-shrink: 0; }
+        .sheet-head { display: flex; align-items: center; gap: 4px; padding: 0 8px 6px 16px; }
+        .sheet-head .title { flex: 1; font-size: 17px; font-weight: 600; }
+        .sheet-head .hint { font-size: 14px; color: var(--hint); font-weight: 400; }
+        .icon-btn { width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--press); color: var(--hint); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        #map { flex: 1; width: 100%; z-index: 0; background: #aad3df; }
+        #map-sheet.result-mode { top: 0; height: auto; border-radius: 0; padding: 0; transform: none; transition: none; box-shadow: none; z-index: 150; }
+        #map-sheet.result-mode .grabber, #map-sheet.result-mode .sheet-head { display: none; }
         .pin-icon { background: none; border: none; }
-        .pin-icon svg { filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4)); }
-        .leaflet-tooltip.opp-tip { background: rgba(11,15,23,0.85); color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 11px; padding: 3px 7px; box-shadow: none; }
+        .pin-icon svg { filter: drop-shadow(0 3px 4px rgba(0,0,0,0.35)); }
+        .leaflet-tooltip.opp-tip { background: rgba(0,0,0,0.7); color: #fff; border: none; border-radius: 6px; font-weight: 600; font-size: 11px; padding: 2px 6px; box-shadow: none; }
         .leaflet-tooltip.opp-tip::before { display: none; }
         .leaflet-control-attribution { font-size: 9px; }
 
-        /* ==================== RESULT SHEET ==================== */
+        /* Result sheet */
         #result-sheet {
             position: fixed; left: 0; right: 0; bottom: 0; z-index: 3000;
-            background: var(--surface); border-radius: 28px 28px 0 0;
-            box-shadow: 0 -20px 60px rgba(0,0,0,0.6);
-            padding: 10px 18px calc(var(--safe-bottom) + 18px);
-            transform: translateY(110%); transition: transform 0.45s cubic-bezier(0.19, 1, 0.22, 1);
-            max-height: 70vh; overflow-y: auto;
+            background: var(--bg); border-radius: 14px 14px 0 0;
+            box-shadow: 0 -6px 30px rgba(0, 0, 0, 0.25);
+            padding: 6px 16px calc(var(--mb-space) + var(--safe-bottom) + 14px);
+            max-height: 72vh; overflow-y: auto;
+            transform: translateY(110%); transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1);
         }
         #result-sheet.show { transform: translateY(0); }
-        #result-sheet .container { display: flex; flex-direction: column; gap: 14px; }
-        .res-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 8px; }
-        #res-pts { font-size: 44px; font-weight: 900; line-height: 1; color: var(--gold); font-variant-numeric: tabular-nums; }
-        .res-pts-lbl { font-size: 13px; color: var(--muted); font-weight: 600; margin-top: 4px; }
-        #res-dist { font-size: 20px; font-weight: 800; text-align: right; }
-        #res-dist-lbl { font-size: 13px; color: var(--muted); text-align: right; }
-        .res-loc { display: flex; align-items: center; gap: 12px; background: var(--surface-2); border-radius: 16px; padding: 12px 14px; }
-        .res-loc-flag { font-size: 30px; line-height: 1; }
-        .res-loc-lbl { font-size: 12px; color: var(--muted); }
-        #res-loc-name { font-weight: 700; font-size: 16px; }
-        #res-mp-list { display: flex; flex-direction: column; gap: 6px; }
-        .res-mp-row { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-        .res-mp-row .rank { width: 22px; color: var(--muted); font-weight: 800; text-align: center; }
-        .res-mp-row .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
-        .res-mp-row.me .nm { color: #93c5fd; }
-        .res-actions { display: flex; gap: 10px; }
-        .res-actions .btn-soft { width: 56px; padding: 0; flex-shrink: 0; }
-        .res-actions .btn-primary { flex: 1; }
+        .res-score { display: flex; align-items: baseline; justify-content: center; gap: 6px; margin: 8px 0 10px; }
+        #res-pts { font-size: 44px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
+        .res-score span { color: var(--hint); font-size: 17px; }
+        #result-sheet .bar { margin: 0 4px 14px; }
+        #result-sheet .section + .section { margin-top: 12px; }
 
-        /* ==================== SUMMARY ==================== */
-        #summary-modal {
-            position: fixed; inset: 0; z-index: 7000; background: var(--bg);
-            overflow-y: auto; padding: calc(var(--safe-top) + 24px) 16px calc(var(--safe-bottom) + 24px);
-            display: flex; flex-direction: column; justify-content: center;
-            animation: fadeIn 0.3s ease;
-        }
-        .summary-head { text-align: center; }
-        .summary-emoji { font-size: 64px; line-height: 1; }
-        #summary-title { margin: 12px 0 4px; font-size: 26px; font-weight: 900; }
-        #final-score { font-size: 64px; font-weight: 900; line-height: 1.1; background: linear-gradient(135deg, #fde68a, #f59e0b); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; font-variant-numeric: tabular-nums; }
-        .summary-sub { color: var(--muted); font-size: 14px; }
-        #summary-rounds { margin: 20px 0; display: flex; flex-direction: column; gap: 8px; }
-        .sum-row { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; }
-        .sum-row .r { width: 26px; height: 26px; border-radius: 50%; background: var(--surface-2); font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; color: var(--muted); flex-shrink: 0; }
-        .sum-row .l { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .sum-row .d { font-size: 12px; color: var(--muted); font-weight: 500; }
-        .summary-actions { display: flex; flex-direction: column; gap: 10px; }
+        /* Summary */
+        #summary-modal { z-index: 7000; }
+        .summary-head { text-align: center; padding: 16px 0 0; }
+        .summary-emoji { font-size: 64px; line-height: 1.1; }
+        #final-score { font-size: 52px; font-weight: 700; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
 
-        /* ==================== LOADING & TOAST ==================== */
+        /* Loading */
         #loading {
             position: fixed; inset: 0; z-index: 8000; background: var(--bg);
-            display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
         }
-        #load-text { color: var(--muted); font-weight: 600; font-size: 15px; margin: 0; }
-        #loading .btn { margin-top: 18px; display: none; }
-        body.game-active #loading .btn { display: inline-flex; }
+        #load-text { color: var(--hint); font-size: 15px; margin: 0; font-weight: 400; }
+        #loading .link-btn { margin-top: 18px; display: none; }
+        body.game-active #loading .link-btn { display: block; }
+        .link-btn { border: none; background: none; color: var(--link); font-size: 17px; cursor: pointer; padding: 10px 16px; }
+
+        /* In-page main button, used only outside Telegram (inside Telegram the native MainButton is used) */
+        #mb-fallback { position: fixed; left: 0; right: 0; bottom: 0; z-index: 9500; padding: 8px 16px calc(var(--safe-bottom) + 8px); background: var(--bg); }
+        #mb-fallback button {
+            width: 100%; max-width: 520px; margin: 0 auto; display: flex; align-items: center; justify-content: center;
+            height: 50px; border: none; border-radius: 12px; background: var(--accent); color: var(--accent-text);
+            font-size: 17px; font-weight: 600; cursor: pointer;
+        }
+        #mb-fallback button:disabled { opacity: 0.45; cursor: default; }
+        .spinner { width: 20px; height: 20px; border-radius: 50%; border: 2.5px solid currentColor; border-right-color: transparent; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
         #toast {
-            position: fixed; left: 50%; top: calc(var(--safe-top) + 64px); z-index: 9000;
-            transform: translate(-50%, -20px); opacity: 0; pointer-events: none;
-            background: rgba(28, 36, 51, 0.96); border: 1px solid var(--border);
-            padding: 12px 18px; border-radius: 14px; font-size: 14px; font-weight: 600;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.4); transition: all 0.25s ease; max-width: 90vw; text-align: center;
+            position: fixed; left: 16px; right: 16px; top: calc(var(--safe-top) + 12px); z-index: 9900;
+            max-width: 480px; margin: 0 auto; padding: 12px 16px; border-radius: 12px;
+            background: rgba(30, 30, 30, 0.92); color: #fff; font-size: 15px;
+            opacity: 0; transform: translateY(-10px); pointer-events: none; transition: all 0.25s ease;
         }
-        #toast.show { opacity: 1; transform: translate(-50%, 0); }
+        #toast.show { opacity: 1; transform: none; }
 
-        @media (min-width: 420px) { #country-grid { grid-template-columns: repeat(4, 1fr); } }
+        .fade-in { animation: fadeIn 0.2s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
 
-    <!-- STREET VIEW -->
     <div id="mly"></div>
 
     <!-- LOADING -->
     <div id="loading">
         <lottie-player
             src="https://raw.githubusercontent.com/Vasiliy-katsyka/GeoGuessr/main/ChicklingEmoji_AgAD1S0AAkOY8Ug.json"
-            background="transparent" speed="1" style="width: 140px; height: 140px;" loop autoplay>
+            background="transparent" speed="1" style="width: 120px; height: 120px;" loop autoplay>
         </lottie-player>
         <h3 id="load-text">Loading...</h3>
-        <button class="btn btn-soft" onclick="window.exitGame()" data-i18n="btn_cancel">Cancel</button>
+        <button class="link-btn" onclick="window.exitGame()" data-i18n="btn_cancel">Cancel</button>
     </div>
 
     <!-- ==================== HOME ==================== -->
     <div id="home" class="screen hidden">
-        <div class="container">
-            <div class="home-header">
-                <button class="profile-chip" onclick="window.openProfile()">
-                    <div class="avatar" id="home-avatar">G</div>
-                    <div style="min-width:0;">
-                        <div class="hello" data-i18n="lbl_hello">Welcome back</div>
-                        <div class="hello-name" id="home-name">Guest</div>
-                    </div>
-                </button>
-                <button class="chip" onclick="window.toggleLanguage()" aria-label="Language">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                    <span id="lang-label">EN</span>
-                </button>
-            </div>
-
-            <div class="hero">
-                <lottie-player class="hero-lottie"
+        <div class="wrap">
+            <div class="home-hero">
+                <lottie-player
                     src="https://raw.githubusercontent.com/Vasiliy-katsyka/GeoGuessr/main/RestrictedEmoji_AgADHFgAAt1K8Eo.json"
                     background="transparent" speed="1" loop autoplay>
                 </lottie-player>
-                <span class="hero-tag" data-i18n="hero_tag">Classic</span>
-                <h1 data-i18n="hero_title">Where in the world?</h1>
-                <p data-i18n="hero_desc">Drop into a random street anywhere on Earth and guess where you are.</p>
-                <button class="btn btn-block" id="btn-endless" onclick="window.startEndless()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z"/></svg>
-                    <span class="btn-label" data-i18n="btn_play_world">Play now</span>
-                </button>
+                <div class="page-title">GeoGuessr</div>
+                <div class="page-sub" data-i18n="app_subtitle">Guess where in the world you are</div>
             </div>
 
-            <div class="section-title" data-i18n="lbl_more_modes">More ways to play</div>
-            <div class="mode-list">
-                <button class="mode-card" onclick="window.openCountryMenu()">
-                    <div class="mode-icon" style="background: rgba(139, 92, 246, 0.16);">🗺️</div>
-                    <div class="mode-text">
-                        <div class="mode-title" data-i18n="mode_country_t">Countries</div>
-                        <div class="mode-desc" data-i18n="mode_country_d">Pick one country and master it. Endless or timed.</div>
+            <div class="section" style="margin-top:18px;">
+                <button class="row" onclick="window.openProfile()" style="min-height:62px;">
+                    <div class="avatar" id="home-avatar">G</div>
+                    <div class="row-body">
+                        <div class="row-title" id="home-name" style="font-weight:600;">Guest</div>
+                        <div class="row-sub" id="home-level">Level 1</div>
                     </div>
-                    <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                    <svg class="chev" width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m1 1 6 6-6 6"/></svg>
                 </button>
-                <button class="mode-card" onclick="window.openFriendMenu()">
-                    <div class="mode-icon" style="background: rgba(34, 197, 94, 0.16);">👥</div>
-                    <div class="mode-text">
-                        <div class="mode-title" data-i18n="mode_party_t">Party</div>
-                        <div class="mode-desc" data-i18n="mode_party_d">Play live with up to 20 friends in one room.</div>
+            </div>
+
+            <div class="section-header" data-i18n="lbl_modes">Game modes</div>
+            <div class="section icons">
+                <button class="row" onclick="window.startEndless()">
+                    <div class="row-icon" style="background:#2a9ef1;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                     </div>
-                    <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                    <div class="row-body"><div class="row-title" data-i18n="mode_world_t">World</div><div class="row-sub" data-i18n="mode_world_d">Random places all over the globe</div></div>
+                    <svg class="chev" width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m1 1 6 6-6 6"/></svg>
+                </button>
+                <button class="row" onclick="window.openCountryMenu()">
+                    <div class="row-icon" style="background:#9f6cf2;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 8 2a6 6 0 0 0 3.6-1.2.5.5 0 0 1 .4.4V14a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.5"/></svg>
+                    </div>
+                    <div class="row-body"><div class="row-title" data-i18n="mode_country_t">Countries</div><div class="row-sub" data-i18n="mode_country_d">Pick one country, endless or timed</div></div>
+                    <svg class="chev" width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m1 1 6 6-6 6"/></svg>
+                </button>
+                <button class="row" onclick="window.openFriendMenu()">
+                    <div class="row-icon" style="background:#3cc35b;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </div>
+                    <div class="row-body"><div class="row-title" data-i18n="mode_party_t">Party</div><div class="row-sub" data-i18n="mode_party_d">Play with up to 20 friends</div></div>
+                    <svg class="chev" width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m1 1 6 6-6 6"/></svg>
                 </button>
             </div>
+            <div class="section-footer" data-i18n="how_to">Look around the street view, then open the map and drop a pin. The closer you are, the more points — up to 5,000 per round.</div>
 
-            <div class="section-title" data-i18n="lbl_your_stats">Your stats</div>
-            <div class="stats">
-                <div class="stat"><div class="stat-val" id="home-games">0</div><div class="stat-lbl" data-i18n="lbl_games">Rounds</div></div>
-                <div class="stat"><div class="stat-val" id="home-avg">0</div><div class="stat-lbl" data-i18n="lbl_avg">Avg score</div></div>
-                <div class="stat"><div class="stat-val" id="home-best">0</div><div class="stat-lbl" data-i18n="lbl_best">Best</div></div>
-            </div>
-
-            <div class="section-title" data-i18n="lbl_how">How to play</div>
-            <div class="card how">
-                <div class="how-step"><span class="how-num">1</span><span data-i18n="how_1">Look around — drag to turn, tap arrows to move.</span></div>
-                <div class="how-step"><span class="how-num">2</span><span data-i18n="how_2">Tap “Guess”, then drop a pin on the map.</span></div>
-                <div class="how-step"><span class="how-num">3</span><span data-i18n="how_3">The closer you are, the more points — up to 5,000.</span></div>
+            <div class="section-header" data-i18n="lbl_settings">Settings</div>
+            <div class="section icons">
+                <button class="row" onclick="window.toggleLanguage()">
+                    <div class="row-icon" style="background:#ff9500;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/></svg>
+                    </div>
+                    <div class="row-body"><div class="row-title" data-i18n="lbl_language">Language</div></div>
+                    <span class="row-value" id="lang-label">English</span>
+                </button>
             </div>
         </div>
     </div>
 
     <!-- ==================== COUNTRY ==================== -->
-    <div id="country-screen" class="screen has-footer hidden">
-        <div class="container">
-            <div class="topbar">
-                <button class="icon-btn" onclick="window.showMainMenu()" aria-label="Back">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                </button>
-                <h2 data-i18n="lbl_select_country">Choose a country</h2>
+    <div id="country-screen" class="screen hidden">
+        <div class="wrap">
+            <div class="page-title" data-i18n="lbl_select_country">Choose a country</div>
+            <div class="segmented" style="margin-top:12px;">
+                <button id="cm-btn-endless" class="active" onclick="window.setCountryMode('endless')" data-i18n="mode_endless">Endless</button>
+                <button id="cm-btn-chall" onclick="window.setCountryMode('challenge')" data-i18n="mode_timed">5 rounds · 2 min</button>
             </div>
             <label class="search">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
                 <input type="search" id="country-search" data-i18n-ph="search_ph" placeholder="Search" autocomplete="off">
             </label>
-            <div id="country-grid"></div>
-        </div>
-    </div>
-    <div id="country-footer" class="footer-bar hidden">
-        <div class="container">
-            <div class="segmented">
-                <button id="cm-btn-endless" class="active" onclick="window.setCountryMode('endless')">∞ <span data-i18n="mode_endless">Endless</span></button>
-                <button id="cm-btn-chall" onclick="window.setCountryMode('challenge')">⏱ <span data-i18n="mode_timed">5 rounds · 2 min</span></button>
-            </div>
-            <button id="country-play" class="btn btn-primary btn-block" onclick="window.startCountryGame()" disabled>
-                <span class="btn-label" id="country-play-label">Pick a country</span>
-            </button>
+            <div class="section-header" style="margin-top:16px;" data-i18n="lbl_countries">Countries</div>
+            <div class="section" id="country-grid" style="--sep-left:60px;"></div>
         </div>
     </div>
 
     <!-- ==================== PARTY ==================== -->
     <div id="party-screen" class="screen hidden">
-        <div class="container">
-            <div class="topbar">
-                <button class="icon-btn" onclick="window.showMainMenu()" aria-label="Back">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                </button>
-                <h2 data-i18n="friend_mode">Party mode</h2>
-            </div>
+        <div class="wrap">
+            <div class="page-title" data-i18n="friend_mode">Party</div>
+            <div class="page-sub" data-i18n="party_sub">Play the same places with friends and see who's closest.</div>
 
-            <div class="card party-card">
-                <div class="party-head">
-                    <div class="mode-icon" style="background: rgba(251, 191, 36, 0.16);">👑</div>
-                    <div><h3 data-i18n="party_host_t">Host a game</h3><p data-i18n="party_host_d">Create a room and invite your friends.</p></div>
-                </div>
-                <button id="btn-create" class="btn btn-green btn-block" onclick="window.createRoom()">
-                    <span class="btn-label" data-i18n="btn_create_play">Create room</span>
-                    <div class="spinner"></div>
-                </button>
+            <div class="section-header" data-i18n="lbl_join_header">Join a room</div>
+            <div class="section">
+                <input type="text" id="join-code" class="code-input" placeholder="00000" maxlength="5" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
             </div>
+            <div class="section-footer" data-i18n="party_join_d">Enter the 5-digit code your friend sees in their lobby.</div>
 
-            <div class="card party-card" style="margin-top:12px;">
-                <div class="party-head">
-                    <div class="mode-icon" style="background: rgba(59, 130, 246, 0.16);">🎟️</div>
-                    <div><h3 data-i18n="lbl_join_header">Join a game</h3><p data-i18n="party_join_d">Enter the 5-digit code from your friend.</p></div>
-                </div>
-                <input type="text" id="join-code" class="code-input" placeholder="•••••" maxlength="5" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
-                <button id="btn-join" class="btn btn-primary btn-block" onclick="window.joinRoom()" disabled>
-                    <span class="btn-label" data-i18n="btn_join">Join</span>
-                    <div class="spinner"></div>
+            <div class="section icons" style="margin-top:24px;">
+                <button class="row" onclick="window.scanQR()">
+                    <div class="row-icon" style="background:#2a9ef1;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/></svg>
+                    </div>
+                    <div class="row-body"><div class="row-title" data-i18n="btn_scan_qr">Scan QR code</div></div>
                 </button>
-                <div class="divider" data-i18n="lbl_or">or</div>
-                <button class="btn btn-soft btn-block" onclick="window.scanQR()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>
-                    <span class="btn-label" data-i18n="btn_scan_qr">Scan QR code</span>
+                <button class="row" id="btn-create" onclick="window.createRoom()">
+                    <div class="row-icon" style="background:#3cc35b;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                    </div>
+                    <div class="row-body"><div class="row-title" data-i18n="btn_create_play">Create a new room</div><div class="row-sub" data-i18n="party_host_d">You'll be the host and start the game</div></div>
+                    <div class="spinner hidden" style="color:var(--hint);"></div>
                 </button>
             </div>
         </div>
@@ -580,191 +409,145 @@
 
     <!-- ==================== LOBBY ==================== -->
     <div id="lobby-screen" class="screen hidden">
-        <div class="container">
-            <div class="topbar">
-                <button class="icon-btn" onclick="window.leaveLobby()" aria-label="Leave">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                </button>
-                <h2 data-i18n="lobby_title">Lobby</h2>
-            </div>
-
-            <div class="card lobby-code-card">
+        <div class="wrap">
+            <div class="page-title" data-i18n="lobby_title">Lobby</div>
+            <div class="section lobby-card" style="margin-top:14px;">
                 <div class="lobby-label" data-i18n="lbl_room_code">Room code</div>
                 <div id="lobby-code-display">-----</div>
                 <div id="lobby-qr-container"></div>
-                <p class="lobby-hint" data-i18n="lbl_share_instr">Friends can scan the QR or enter the code</p>
-                <div class="row">
-                    <button class="btn btn-soft" onclick="window.copyCode()">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                        <span class="btn-label" data-i18n="btn_copy">Copy</span>
-                    </button>
-                    <button class="btn btn-soft" onclick="window.inviteFriends()">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-                        <span class="btn-label" data-i18n="btn_invite">Invite</span>
-                    </button>
-                </div>
+            </div>
+            <div class="section-footer" data-i18n="lbl_share_instr">Friends can scan this QR with their camera or enter the code in Party → Join.</div>
+
+            <div class="section icons" style="margin-top:20px;">
+                <button class="row link" onclick="window.inviteFriends()">
+                    <div class="row-icon" style="background:#2a9ef1;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                    </div>
+                    <div class="row-body"><div class="row-title" data-i18n="btn_invite">Invite friends</div></div>
+                </button>
+                <button class="row link" onclick="window.copyCode()">
+                    <div class="row-icon" style="background:#8e8e93;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </div>
+                    <div class="row-body"><div class="row-title" data-i18n="btn_copy">Copy code</div></div>
+                </button>
             </div>
 
-            <div class="section-title"><span data-i18n="lbl_players">Players</span> · <span id="player-count">0</span>/20</div>
-            <div id="player-list"></div>
+            <div class="section-header"><span data-i18n="lbl_players">Players</span> — <span id="player-count">0</span>/20</div>
+            <div class="section" id="player-list" style="--sep-left:62px;"></div>
+            <div id="lobby-status" class="section-footer waiting hidden"><span class="dot"></span><span data-i18n="lbl_waiting_host">Waiting for the host to start…</span></div>
 
-            <div style="margin-top:20px;">
-                <button id="host-actions" class="btn btn-green btn-block hidden" onclick="window.hostStartGame()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z"/></svg>
-                    <span class="btn-label" data-i18n="btn_start_game">Start game</span>
-                </button>
-                <div id="lobby-status" class="waiting-note hidden"><span class="pulse"></span><span data-i18n="lbl_waiting_host">Waiting for the host to start…</span></div>
+            <div class="section" style="margin-top:28px;">
+                <button class="row destructive" onclick="window.leaveLobby()" data-i18n="btn_leave">Leave room</button>
             </div>
         </div>
     </div>
 
     <!-- ==================== PROFILE ==================== -->
     <div id="profile-screen" class="screen hidden">
-        <div class="container">
-            <div class="topbar">
-                <button class="icon-btn" onclick="window.closeProfile()" aria-label="Back">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                </button>
-                <h2 data-i18n="lbl_profile">Profile</h2>
+        <div class="wrap">
+            <div class="profile-head">
+                <div class="avatar xl" id="pf-avatar">G</div>
+                <h2 id="pf-name">User</h2>
+                <div class="page-sub" id="pf-level">Level 1</div>
             </div>
 
-            <div class="profile-top">
-                <div class="avatar lg" id="pf-avatar">G</div>
-                <h3 id="pf-name">User</h3>
-            </div>
-
-            <div class="card level-card">
-                <div class="level-row"><b id="pf-level">Level 1</b><span id="pf-level-next">0 / 10,000 XP</span></div>
+            <div class="section" style="margin-top:20px; padding:14px 16px;">
+                <div style="display:flex; justify-content:space-between; font-size:15px; margin-bottom:8px;">
+                    <span data-i18n="lbl_next_level">Next level</span><span class="row-value" id="pf-level-next">0 / 10,000 XP</span>
+                </div>
                 <div class="bar"><div id="pf-level-bar"></div></div>
             </div>
 
-            <div class="stats" style="margin-top:12px;">
-                <div class="stat"><div class="stat-val" id="pf-total-games">0</div><div class="stat-lbl" data-i18n="lbl_games">Rounds</div></div>
-                <div class="stat"><div class="stat-val" id="pf-total-score" style="color:var(--gold);">0</div><div class="stat-lbl" data-i18n="lbl_score">Total XP</div></div>
-                <div class="stat"><div class="stat-val" id="pf-best">0</div><div class="stat-lbl" data-i18n="lbl_best">Best</div></div>
+            <div class="section-header" data-i18n="lbl_stats">Statistics</div>
+            <div class="section">
+                <div class="row"><div class="row-body" data-i18n="lbl_games">Rounds played</div><span class="row-value" id="pf-total-games">0</span></div>
+                <div class="row"><div class="row-body" data-i18n="lbl_score">Total XP</div><span class="row-value" id="pf-total-score">0</span></div>
+                <div class="row"><div class="row-body" data-i18n="lbl_avg">Average per round</div><span class="row-value" id="pf-avg">—</span></div>
+                <div class="row"><div class="row-body" data-i18n="lbl_best">Best round</div><span class="row-value" id="pf-best">—</span></div>
             </div>
 
-            <div class="section-title" data-i18n="lbl_history">Recent rounds</div>
-            <div class="card" style="padding: 4px 14px;">
-                <div id="history-list"></div>
-            </div>
+            <div class="section-header" data-i18n="lbl_history">Recent rounds</div>
+            <div class="section" id="history-list" style="--sep-left:60px;"></div>
 
-            <button class="btn btn-danger-soft btn-block" style="margin-top:24px;" onclick="window.clearData()">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
-                <span class="btn-label" data-i18n="btn_reset">Reset progress</span>
-            </button>
+            <div class="section" style="margin-top:28px;">
+                <button class="row destructive" onclick="window.clearData()" data-i18n="btn_reset">Reset progress</button>
+            </div>
         </div>
     </div>
 
     <!-- ==================== GAME HUD ==================== -->
     <div id="hud">
         <div class="hud-row">
-            <button id="exit-btn" class="icon-btn glass" onclick="window.exitGame()" aria-label="Exit">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            <button id="exit-btn" class="pill" onclick="window.exitGame()" aria-label="Exit">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </button>
             <div class="hud-center">
-                <div class="hud-pill glass">
-                    <span id="mode-label">🌍 World</span>
-                    <span id="round-indicator">Round 1</span>
-                </div>
-                <div id="timer-box" class="hud-pill glass hidden">2:00</div>
+                <div class="pill"><span id="mode-label">World</span><span id="round-indicator">Round 1</span></div>
+                <div id="timer-box" class="pill hidden">2:00</div>
             </div>
-            <button id="score-box" class="glass" onclick="window.toggleScoreboard()">
-                <span class="hud-score-lbl" data-i18n="lbl_me">Score</span>
-                <span id="score-me">0</span>
+            <button id="score-box" class="pill" onclick="window.toggleScoreboard()">
+                <small data-i18n="lbl_me">Score</small><span id="score-me">0</span>
             </button>
         </div>
-        <div id="mp-scores" class="glass collapsed hidden"></div>
+        <div id="mp-scores" class="pill collapsed hidden"></div>
         <div id="host-controls" class="hidden">
-            <button class="chip chip-danger" onclick="window.hostForceRoundEnd()">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
-                <span data-i18n="btn_end_round">End round</span>
-            </button>
+            <button class="pill" onclick="window.hostForceRoundEnd()" data-i18n="btn_end_round">End round</button>
         </div>
     </div>
 
-    <button id="guess-fab" class="btn btn-primary" onclick="window.openMap()">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-        <span class="btn-label" data-i18n="btn_guess">Guess</span>
-    </button>
-
     <div id="map-sheet">
-        <div class="sheet-grabber"></div>
+        <div class="grabber"></div>
         <div class="sheet-head">
-            <div class="sheet-title" data-i18n="lbl_your_guess">Where are you?</div>
+            <div class="title"><span data-i18n="lbl_your_guess">Where are you?</span> <span class="hint" id="map-hint" data-i18n="btn_guess_tap">Tap to drop a pin</span></div>
             <button class="icon-btn" onclick="window.toggleMapSize()" aria-label="Resize map">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
             </button>
             <button class="icon-btn" onclick="window.closeMap()" aria-label="Close map">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </button>
         </div>
         <div id="map"></div>
-        <button id="confirm-btn" class="btn btn-primary btn-block" onclick="window.submitGuess()" disabled>Tap the map to drop a pin</button>
     </div>
 
     <!-- ==================== RESULT SHEET ==================== -->
     <div id="result-sheet">
-        <div class="container">
-            <div class="sheet-grabber"></div>
-            <div class="res-top">
-                <div>
-                    <div id="res-pts">0</div>
-                    <div class="res-pts-lbl" data-i18n="lbl_points">points</div>
-                </div>
-                <div>
-                    <div id="res-dist">0 km</div>
-                    <div id="res-dist-lbl" data-i18n="lbl_away">from the spot</div>
-                </div>
+        <div class="wrap">
+            <div class="grabber" style="margin-bottom:0;"></div>
+            <div class="res-score"><span id="res-pts">0</span><span data-i18n="lbl_points">points</span></div>
+            <div class="bar"><div id="res-bar"></div></div>
+            <div class="section">
+                <div class="row"><span class="row-flag" id="res-loc-flag">🌍</span><div class="row-body"><div class="row-sub" data-i18n="lbl_location">It was in</div><div class="row-title" id="res-loc-name">City</div></div></div>
+                <div class="row" style="--sep-left:60px;"><span class="row-flag">📏</span><div class="row-body"><div class="row-sub" data-i18n="lbl_distance">Your guess was</div><div class="row-title" id="res-dist">0 km</div></div></div>
             </div>
-            <div class="bar gold"><div id="res-bar"></div></div>
-            <div class="res-loc">
-                <span class="res-loc-flag" id="res-loc-flag">🌍</span>
-                <div style="min-width:0;">
-                    <div class="res-loc-lbl" data-i18n="lbl_location">It was in</div>
-                    <div id="res-loc-name">City, Country</div>
-                </div>
-            </div>
-            <div id="res-mp-list" class="card hidden" style="padding:12px 14px;"></div>
-            <div class="res-actions">
-                <button class="btn btn-soft" onclick="window.shareResult()" aria-label="Share">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>
-                </button>
-                <button class="btn btn-primary" id="next-btn" onclick="window.nextRound()">
-                    <span class="btn-label">Next round</span>
-                    <div class="spinner"></div>
-                </button>
+            <div class="section hidden" id="res-mp-list" style="--sep-left:60px;"></div>
+            <div class="section">
+                <button class="row link" onclick="window.shareResult()" style="justify-content:center;" data-i18n="btn_share">Share score</button>
             </div>
         </div>
     </div>
 
     <!-- ==================== SUMMARY ==================== -->
-    <div id="summary-modal" class="hidden">
-        <div class="container">
+    <div id="summary-modal" class="screen hidden">
+        <div class="wrap">
             <div class="summary-head">
                 <div class="summary-emoji" id="summary-emoji">🏆</div>
-                <h1 id="summary-title">Game over</h1>
+                <div class="page-title" id="summary-title" style="margin-top:6px;">Game over</div>
                 <div id="final-score">0</div>
-                <div class="summary-sub" id="summary-sub">points</div>
+                <div class="page-sub" id="summary-sub">points</div>
             </div>
-            <div id="summary-rounds"></div>
-            <div class="summary-actions">
-                <button class="btn btn-primary btn-block" id="btn-play-again" onclick="window.playAgain()">
-                    <span class="btn-label" data-i18n="btn_play_again">Play again</span>
-                </button>
-                <button class="btn btn-soft btn-block" onclick="window.shareResult()">
-                    <span class="btn-label" data-i18n="btn_share">Share score</span>
-                </button>
-                <button class="btn btn-ghost btn-block" onclick="window.showMainMenu()">
-                    <span class="btn-label" data-i18n="btn_menu">Main menu</span>
-                </button>
+            <div class="section-header" data-i18n="lbl_rounds">Rounds</div>
+            <div class="section" id="summary-rounds" style="--sep-left:60px;"></div>
+            <div class="section" style="margin-top:24px;">
+                <button class="row link" style="justify-content:center;" onclick="window.shareResult()" data-i18n="btn_share">Share score</button>
+                <button class="row link" style="justify-content:center;" onclick="window.showMainMenu()" data-i18n="btn_menu">Main menu</button>
             </div>
         </div>
     </div>
 
+    <div id="mb-fallback" class="hidden"><button id="mb-fallback-btn"></button></div>
     <div id="toast"></div>
 
-    <!-- SCRIPTS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/mapillary-js@4.1.0/dist/mapillary.js"></script>
 
@@ -1340,7 +1123,90 @@
             ]}
         };
 
+        Object.assign(TR.en, {
+            app_subtitle: "Guess where in the world you are",
+            lbl_modes: "Game modes",
+            mode_world_t: "World",
+            mode_world_d: "Random places all over the globe",
+            mode_country_d: "Pick one country, endless or timed",
+            mode_party_d: "Play with up to 20 friends",
+            how_to: "Look around the street view, then open the map and drop a pin. The closer you are, the more points — up to 5,000 per round.",
+            lbl_settings: "Settings",
+            lbl_language: "Language",
+            lang_name: "English",
+            lbl_countries: "Countries",
+            friend_mode: "Party",
+            party_sub: "Play the same places with friends and see who's closest.",
+            lbl_join_header: "Join a room",
+            party_join_d: "Enter the 5-digit code your friend sees in their lobby.",
+            btn_create_play: "Create a new room",
+            party_host_d: "You'll be the host and start the game",
+            btn_enter_code: "Enter a room code",
+            btn_join: "Join room",
+            lbl_share_instr: "Friends can scan this QR with their camera or enter the code in Party → Join.",
+            btn_invite: "Invite friends",
+            btn_copy: "Copy code",
+            btn_leave: "Leave room",
+            btn_start_game: "Start game",
+            lbl_next_level: "Next level",
+            lbl_stats: "Statistics",
+            lbl_games: "Rounds played",
+            lbl_avg: "Average per round",
+            lbl_best: "Best round",
+            btn_make_guess: "Make a guess",
+            btn_guess_tap: "Tap to drop a pin",
+            btn_guess_ready: "Pin placed",
+            btn_confirm: "Confirm guess",
+            lbl_distance: "Your guess was",
+            lbl_distance_val: "{d} away",
+            lbl_rounds: "Rounds",
+            lbl_level_xp: "Level {l} · {x} XP",
+            btn_play_in: "Play {c}"
+        });
+        Object.assign(TR.ru, {
+            app_subtitle: "Угадай, где ты на карте мира",
+            lbl_modes: "Режимы",
+            mode_world_t: "Весь мир",
+            mode_world_d: "Случайные места по всей планете",
+            mode_country_d: "Одна страна — бесконечно или на время",
+            mode_party_d: "Игра с друзьями — до 20 человек",
+            how_to: "Осмотрись на улице, открой карту и поставь метку. Чем ближе — тем больше очков, до 5 000 за раунд.",
+            lbl_settings: "Настройки",
+            lbl_language: "Язык",
+            lang_name: "Русский",
+            lbl_countries: "Страны",
+            friend_mode: "Игра с друнами",
+            party_sub: "Одни и те же места для всех — кто окажется ближе?",
+            lbl_join_header: "Войти в комнату",
+            party_join_d: "Введи 5-значный код, который друг видит в своём лобби.",
+            btn_create_play: "Создать комнату",
+            party_host_d: "Ты будешь хостом и запустишь игру",
+            btn_enter_code: "Введите код комнаты",
+            btn_join: "Войтi",
+            lbl_share_instr: "Друзья могут отсканировать QR камерой или ввести код в разделе «Игра с друнами».",
+            btn_invite: "Позвать друзей",
+            btn_copy: "Скопировать код",
+            btn_leave: "Выйтi из комнаты",
+            btn_start_game: "Начать игру",
+            lbl_next_level: "Следующий уровень",
+            lbl_stats: "Статистика",
+            lbl_games: "Сыграно раундов",
+            lbl_avg: "В среднем за раунд",
+            lbl_best: "Лучший раунд",
+            btn_make_guess: "Угадать",
+            btn_guess_tap: "Нажми на картость",
+            btn_guess_ready: "Метка стоит",
+            btn_confirm: "Подтвердить",
+            lbl_distance: "Твоя метка",
+            lbl_distance_val: "в {d} от точки",
+            lbl_rounds: "Раунды",
+            lbl_level_xp: "Уровень {l} · {x} XP",
+            btn_play_in: "Играть: {c}"
+        });
+
         let map, mly, guessMarker, resultLine, resultMarker, oppMarkers = [];
+        const IN_TG = !!(TG && TG.initData);
+        const XP_PER_LEVEL = 10000;
 
         // ==================== HELPERS ====================
         const $ = (id) => document.getElementById(id);
@@ -1349,6 +1215,9 @@
         function t(key) { return TR[STATE.lang][key] || TR.en[key] || key; }
         function countryName(code) { return (STATE.lang === 'ru' && COUNTRY_RU[code]) || COUNTRY_POOLS[code].name; }
         function initials(name) { return (String(name || '?').trim()[0] || '?').toUpperCase(); }
+        function avatarColor(id) { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return 'c' + (h % 6 + 1); }
+        const CHEV = `<svg class="chev" width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m1 1 6 6-6 6"/></svg>`;
+        const CHECK = `<svg class="check" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
 
         function haptic(type) {
             try {
@@ -1359,13 +1228,9 @@
                 else h.impactOccurred(type || 'light');
             } catch (e) { }
         }
-        function tgAlert(msg) {
-            if (tgv('6.2')) TG.showAlert(msg); else alert(msg);
-        }
+        function tgAlert(msg) { if (tgv('6.2')) TG.showAlert(msg); else alert(msg); }
         function tgConfirm(msg) {
-            return new Promise(res => {
-                if (tgv('6.2')) TG.showConfirm(msg, ok => res(!!ok)); else res(confirm(msg));
-            });
+            return new Promise(res => { if (tgv('6.2')) TG.showConfirm(msg, ok => res(!!ok)); else res(confirm(msg)); });
         }
         let toastTimer;
         function toast(msg) {
@@ -1385,20 +1250,51 @@
             requestAnimationFrame(step);
         }
         function formatDist(m) { return m < 1000 ? Math.round(m) + " m" : m < 10000 ? (m / 1000).toFixed(1) + " km" : fmt(m / 1000) + " km"; }
-        function scoreFor(dist) { return Math.round(MAX_PTS * Math.exp(-dist / 120000)); }
-        function showLoading(text) { $('load-text').textContent = text || t('lbl_loading'); $('loading').classList.remove('hidden'); }
+        function scoreFor(dist) { return Math.round(5000 * Math.exp(-dist / 120000)); }
+        function showLoading(text) { setMain(null); $('load-text').textContent = text || t('lbl_loading'); $('loading').classList.remove('hidden'); }
         function hideLoading() { $('loading').classList.add('hidden'); }
         function setAvatar(el) {
             if (USER.photo_url) el.innerHTML = `<img src="${esc(USER.photo_url)}" alt="">`;
             else el.textContent = initials(STATE.myName);
         }
+        function cssVar(name, fallback) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback; }
         function pinIcon(color) {
             return L.divIcon({
                 className: 'pin-icon',
-                html: `<svg width="34" height="44" viewBox="-2 -2 38 48"><path d="M17 0C7.6 0 0 7.4 0 16.6 0 29 17 44 17 44s17-15 17-27.4C34 7.4 26.4 0 17 0z" fill="${color}" stroke="#fff" stroke-width="2.5"/><circle cx="17" cy="16.5" r="6" fill="#fff"/></svg>`,
-                iconSize: [34, 44], iconAnchor: [17, 43]
+                html: `<svg width="30" height="40" viewBox="-2 -2 38 48"><path d="M17 0C7.6 0 0 7.4 0 16.6 0 29 17 44 17 44s17-15 17-27.4C34 7.4 26.4 0 17 0z" fill="${color}" stroke="#fff" stroke-width="3"/><circle cx="17" cy="16.5" r="6" fill="#fff"/></svg>`,
+                iconSize: [30, 40], iconAnchor: [15, 39]
             });
         }
+
+        // ==================== MAIN BUTTON ====================
+        // One primary action per screen. Inside Telegram it is the native MainButton;
+        // in a regular browser an equivalent button is pinned to the bottom of the page.
+        let mainAction = null;
+        function setMain(opts) {
+            mainAction = opts && opts.active !== false ? opts.onClick : null;
+            if (IN_TG) {
+                const m = TG.MainButton;
+                if (!opts) { m.hideProgress(); m.hide(); return; }
+                const tp = TG.themeParams || {};
+                const active = opts.active !== false;
+                m.setParams({
+                    text: opts.text, is_active: active, is_visible: true,
+                    color: active ? (tp.button_color || '#2481cc') : (tp.hint_color || '#999999'),
+                    text_color: tp.button_text_color || '#ffffff'
+                });
+                opts.progress ? m.showProgress(false) : m.hideProgress();
+                return;
+            }
+            const wrap = $('mb-fallback'), btn = $('mb-fallback-btn');
+            document.body.classList.toggle('mb-fb', !!opts);
+            wrap.classList.toggle('hidden', !opts);
+            if (!opts) return;
+            btn.disabled = opts.active === false || !!opts.progress;
+            btn.innerHTML = opts.progress ? '<span class="spinner"></span>' : esc(opts.text);
+        }
+        function mainProgress() { setMain({ text: '…', onClick: null, progress: true }); }
+        if (IN_TG) TG.MainButton.onClick(() => { if (mainAction) { haptic('light'); mainAction(); } });
+        $('mb-fallback-btn').addEventListener('click', () => { if (mainAction) mainAction(); });
 
         // ==================== BACKGROUND PRELOADING ====================
         const PRELOADED_LOCATIONS = [];
@@ -1438,7 +1334,7 @@
                 if (PRELOADED_LOCATIONS.length < TARGET_PRELOAD_COUNT) {
                     const target = currentPreloadCountry;
                     const loc = await fetchValidLocation(target);
-                    // Drop results that belong to a pool the user already switched away from
+                    // Drop results for a pool the user already switched away from
                     if (loc && target === currentPreloadCountry) PRELOADED_LOCATIONS.push(loc);
                     await new Promise(r => setTimeout(r, 100));
                 } else {
@@ -1471,9 +1367,10 @@
 
         // ==================== INIT ====================
         function init() {
-            map = L.map('map', { zoomControl: false, attributionControl: true, worldCopyJump: true }).setView([20, 0], 2);
+            map = L.map('map', { zoomControl: false, worldCopyJump: true }).setView([20, 0], 2);
             L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '©CARTO ©OSM' }).addTo(map);
             $('map-sheet').addEventListener('transitionend', () => map.invalidateSize());
+            if (TG?.onEvent) TG.onEvent('viewportChanged', () => map.invalidateSize());
 
             const { Viewer } = mapillary;
             mly = new Viewer({ accessToken: MLY_TOKEN, container: 'mly', component: { cover: false, sequence: false } });
@@ -1481,15 +1378,16 @@
             map.on('click', (e) => {
                 if (STATE.isLocked || !$('map-sheet').classList.contains('open')) return;
                 if (guessMarker) guessMarker.setLatLng(e.latlng);
-                else guessMarker = L.marker(e.latlng, { icon: pinIcon('#3b82f6') }).addTo(map);
-                setConfirm('ready');
+                else guessMarker = L.marker(e.latlng, { icon: pinIcon(cssVar('--accent', '#2481cc')) }).addTo(map);
+                $('map-hint').textContent = t('btn_guess_ready');
+                setMain({ text: t('btn_confirm'), onClick: () => window.submitGuess() });
                 haptic('select');
             });
 
             const joinInput = $('join-code');
             joinInput.addEventListener('input', () => {
                 joinInput.value = joinInput.value.replace(/\D/g, '').slice(0, 5);
-                $('btn-join').disabled = joinInput.value.length !== 5;
+                updatePartyMain();
             });
             joinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') window.joinRoom(); });
             $('country-search').addEventListener('input', renderCountryGrid);
@@ -1502,7 +1400,6 @@
 
             hideLoading();
             showScreen('home');
-            renderHome();
 
             // Deep link: t.me/geogur_bot/app?startapp=12345 joins that room directly (once per launch).
             const sp = TG?.initDataUnsafe?.start_param;
@@ -1510,7 +1407,7 @@
                 sessionStorage.setItem('geo_sp_used', sp);
                 $('join-code').value = sp;
                 window.openFriendMenu();
-                connectToRoom(sp, $('btn-join'));
+                window.joinRoom();
             }
         }
 
@@ -1518,37 +1415,45 @@
             document.documentElement.lang = STATE.lang;
             document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = t(el.getAttribute('data-i18n')));
             document.querySelectorAll('[data-i18n-ph]').forEach(el => el.placeholder = t(el.getAttribute('data-i18n-ph')));
-            $('lang-label').textContent = STATE.lang.toUpperCase();
-            updateCountryPlayBtn();
+            $('lang-label').textContent = t('lang_name');
         }
 
         window.toggleLanguage = () => {
             STATE.lang = STATE.lang === 'en' ? 'ru' : 'en';
             localStorage.setItem('geo_lang', STATE.lang);
-            haptic('light');
+            haptic('select');
             applyTranslations();
-            renderHome();
             renderCountryGrid();
+            showScreen(STATE.screen);
         };
 
         // ==================== NAVIGATION ====================
-        const SCREENS = ['home', 'country-screen', 'party-screen', 'lobby-screen', 'profile-screen'];
+        const SCREENS = ['home', 'country-screen', 'party-screen', 'lobby-screen', 'profile-screen', 'summary-modal'];
 
         function showScreen(id) {
+            const changed = STATE.screen !== id;
             SCREENS.forEach(s => $(s).classList.toggle('hidden', s !== id));
-            $('country-footer').classList.toggle('hidden', id !== 'country-screen');
             STATE.screen = id;
             document.body.classList.toggle('game-active', id === 'game');
-            if (SCREENS.includes(id)) $(id).scrollTop = 0;
+            if (SCREENS.includes(id) && changed) { $(id).scrollTop = 0; $(id).classList.remove('fade-in'); void $(id).offsetWidth; $(id).classList.add('fade-in'); }
             if (tgv('6.1')) { id === 'home' ? TG.BackButton.hide() : TG.BackButton.show(); }
             if (tgv('6.2')) { id === 'game' ? TG.enableClosingConfirmation() : TG.disableClosingConfirmation(); }
+
+            // Primary action for the screen
+            if (id === 'home') { renderHome(); setMain({ text: '▶  ' + t('btn_play_world'), onClick: window.startEndless }); }
+            else if (id === 'country-screen') updateCountryMain();
+            else if (id === 'party-screen') updatePartyMain();
+            else if (id === 'lobby-screen') updateLobbyMain();
+            else if (id === 'summary-modal') setMain({ text: t('btn_play_again'), onClick: window.playAgain });
+            else if (id === 'profile-screen') setMain(null);
         }
 
         function onBack() {
             haptic('light');
             if (STATE.screen === 'lobby-screen') window.leaveLobby();
             else if (STATE.screen === 'game') {
-                if ($('map-sheet').classList.contains('open') && !$('map-sheet').classList.contains('result-mode')) window.closeMap();
+                const ms = $('map-sheet');
+                if (ms.classList.contains('open') && !ms.classList.contains('result-mode')) window.closeMap();
                 else window.exitGame();
             }
             else window.showMainMenu();
@@ -1559,25 +1464,22 @@
             clearInterval(STATE.timer);
             STATE.mode = 'menu';
             hideLoading();
-            $('summary-modal').classList.add('hidden');
             resetMapUI();
-
-            // Back to the global pool
             STATE.selectedCountry = null;
             setPreloadCountry(null);
             renderCountryGrid();
-
             showScreen('home');
-            renderHome();
         };
+
+        function levelInfo() {
+            return { level: Math.floor(STATE.totalScore / XP_PER_LEVEL) + 1, into: STATE.totalScore % XP_PER_LEVEL };
+        }
+        function bestRound() { return STATE.history.reduce((m, h) => Math.max(m, h.pts || 0), 0); }
 
         function renderHome() {
             $('home-name').textContent = STATE.myName;
             setAvatar($('home-avatar'));
-            $('home-games').textContent = fmt(STATE.totalGames);
-            $('home-avg').textContent = STATE.totalGames ? fmt(STATE.totalScore / STATE.totalGames) : '—';
-            const best = STATE.history.reduce((m, h) => Math.max(m, h.pts || 0), 0);
-            $('home-best').textContent = best ? fmt(best) : '—';
+            $('home-level').textContent = t('lbl_level_xp').replace('{l}', levelInfo().level).replace('{x}', fmt(STATE.totalScore));
         }
 
         // ==================== COUNTRY MODE ====================
@@ -1591,32 +1493,29 @@
                 .filter(code => !q || COUNTRY_POOLS[code].name.toLowerCase().includes(q) || (COUNTRY_RU[code] || '').toLowerCase().includes(q))
                 .sort((a, b) => countryName(a).localeCompare(countryName(b)));
 
-            if (!codes.length) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1;">${t('lbl_no_country')}</div>`; return; }
+            if (!codes.length) { grid.innerHTML = `<div class="empty">${t('lbl_no_country')}</div>`; return; }
 
             codes.forEach(code => {
                 const c = COUNTRY_POOLS[code];
-                const div = document.createElement('div');
-                div.className = 'country-card' + (STATE.selectedCountry === code ? ' selected' : '');
-                div.innerHTML = `<span class="c-flag">${c.flag}</span><span class="c-name">${esc(countryName(code))}</span>`;
-                div.onclick = () => {
-                    document.querySelectorAll('.country-card').forEach(el => el.classList.remove('selected'));
-                    div.classList.add('selected');
+                const row = document.createElement('button');
+                row.className = 'row' + (STATE.selectedCountry === code ? ' selected' : '');
+                row.innerHTML = `<span class="row-flag">${c.flag}</span><div class="row-body"><div class="row-title">${esc(countryName(code))}</div></div>${CHECK}`;
+                row.onclick = () => {
+                    grid.querySelectorAll('.row').forEach(el => el.classList.remove('selected'));
+                    row.classList.add('selected');
                     STATE.selectedCountry = code;
                     setPreloadCountry(code); // start warming this country's queue right away
                     haptic('select');
-                    updateCountryPlayBtn();
+                    updateCountryMain();
                 };
-                grid.appendChild(div);
+                grid.appendChild(row);
             });
         }
 
-        function updateCountryPlayBtn() {
-            const btn = $('country-play');
+        function updateCountryMain() {
             const code = STATE.selectedCountry;
-            btn.disabled = !code;
-            $('country-play-label').textContent = code
-                ? t('btn_play_in').replace('{c}', `${COUNTRY_POOLS[code].flag} ${countryName(code)}`)
-                : t('btn_pick_country');
+            if (!code) { setMain({ text: t('btn_pick_country'), active: false }); return; }
+            setMain({ text: t('btn_play_in').replace('{c}', `${COUNTRY_POOLS[code].flag} ${countryName(code)}`), onClick: window.startCountryGame });
         }
 
         window.setCountryMode = (mode) => {
@@ -1646,7 +1545,6 @@
             STATE.maxRounds = 5;
             STATE.score = 0;
             STATE.roundResults = [];
-            $('summary-modal').classList.add('hidden');
             showScreen('game');
             updateHUD();
             startGameLoop();
@@ -1671,9 +1569,23 @@
             $('host-controls').classList.toggle('hidden', !(STATE.mode === 'multi' && STATE.mpRole === 'host'));
         }
 
+        // Main button while looking around / guessing
+        function guessMain() {
+            if (STATE.isLocked) {
+                if (STATE.mode === 'multi') setMain({ text: t('btn_waiting'), active: false });
+                return;
+            }
+            if ($('map-sheet').classList.contains('open')) {
+                if (guessMarker) setMain({ text: t('btn_confirm'), onClick: () => window.submitGuess() });
+                else setMain({ text: t('btn_guess_tap'), active: false });
+            } else {
+                setMain({ text: '📍  ' + t('btn_make_guess'), onClick: window.openMap });
+            }
+        }
+
         function startGameLoop() {
             resetMapUI();
-            if (STATE.mode === 'multi') { setConfirm('idle'); return; }
+            if (STATE.mode === 'multi') return;
 
             const s = STATE.session;
             showLoading(t('lbl_finding'));
@@ -1691,12 +1603,13 @@
                 .then(() => {
                     if (s !== STATE.session) return;
                     hideLoading();
+                    guessMain();
                     // Timer starts only once the panorama is actually visible
                     if (STATE.mode === 'challenge') startTimer(120);
                 })
                 .catch(() => {
                     if (s !== STATE.session) return;
-                    if (STATE.mode === 'multi') { hideLoading(); return; }
+                    if (STATE.mode === 'multi') { hideLoading(); guessMain(); return; }
                     pickRandomLocation().then(l => {
                         if (s !== STATE.session) return;
                         STATE.currentLoc = l;
@@ -1705,18 +1618,13 @@
                 });
         }
 
-        function setConfirm(state) {
-            const btn = $('confirm-btn');
-            btn.disabled = state !== 'ready';
-            btn.textContent = t(state === 'ready' ? 'btn_confirm' : state === 'waiting' ? 'btn_waiting' : 'btn_guess_tap');
-        }
-
         function resetMapUI() {
             STATE.isLocked = false;
             $('result-sheet').classList.remove('show');
             $('map-sheet').classList.remove('result-mode', 'open', 'expanded');
-            $('guess-fab').classList.remove('hidden');
             $('res-mp-list').classList.add('hidden');
+            $('map-hint').textContent = t('btn_guess_tap');
+            $('host-controls').classList.toggle('hidden', !(STATE.mode === 'multi' && STATE.mpRole === 'host'));
 
             if (guessMarker) map.removeLayer(guessMarker);
             if (resultLine) map.removeLayer(resultLine);
@@ -1725,11 +1633,6 @@
             oppMarkers = [];
             guessMarker = resultLine = resultMarker = null;
             map.setView([20, 0], 2);
-
-            $('host-controls').classList.toggle('hidden', !(STATE.mode === 'multi' && STATE.mpRole === 'host'));
-            setConfirm('idle');
-            $('next-btn').classList.remove('loading');
-            $('next-btn').disabled = false;
         }
 
         function startTimer(seconds) {
@@ -1758,14 +1661,13 @@
 
         // ==================== MAP SHEET ====================
         window.openMap = () => {
-            haptic('light');
             $('map-sheet').classList.add('open');
-            $('guess-fab').classList.add('hidden');
             setTimeout(() => map.invalidateSize(), 50);
+            guessMain();
         };
         window.closeMap = () => {
             $('map-sheet').classList.remove('open', 'expanded');
-            $('guess-fab').classList.remove('hidden');
+            guessMain();
         };
         window.toggleMapSize = () => {
             haptic('light');
@@ -1800,7 +1702,7 @@
             localStorage.setItem('geo_history', JSON.stringify(STATE.history));
 
             if (STATE.mode === 'multi') {
-                setConfirm('waiting');
+                guessMain();
                 const g = { pts, name: STATE.myName };
                 if (uLat) { g.lat = uLat.lat; g.lng = uLat.lng; }
                 update(ref(db, `games/${STATE.gameId}/guesses/${STATE.myUid}`), g);
@@ -1817,20 +1719,18 @@
             $('res-pts').textContent = '0';
             animateNumber($('res-pts'), pts);
             $('res-bar').style.width = '0';
-            requestAnimationFrame(() => requestAnimationFrame(() => $('res-bar').style.width = (pts / MAX_PTS * 100) + '%'));
-            $('res-dist').textContent = missed ? t('lbl_missed') : formatDist(dist);
-            $('res-dist-lbl').classList.toggle('hidden', missed);
+            requestAnimationFrame(() => requestAnimationFrame(() => $('res-bar').style.width = (pts / 5000 * 100) + '%'));
+            $('res-dist').textContent = missed ? t('lbl_missed') : t('lbl_distance_val').replace('{d}', formatDist(dist));
             $('res-loc-name').textContent = STATE.currentLoc.city?.name || '';
             $('res-loc-flag').textContent = STATE.currentLoc.city?.flag || '🌍';
+            $('result-sheet').scrollTop = 0;
             if (pts >= 4500) confetti({ particleCount: 120, spread: 80, origin: { y: 0.7 }, zIndex: 9999 });
         }
 
         function showSingleResult(uLat, aLat, dist, pts, missed) {
             fillResultSheet(pts, dist, missed);
-            const nextBtn = $('next-btn');
             const last = STATE.mode === 'challenge' && STATE.round >= STATE.maxRounds;
-            nextBtn.querySelector('.btn-label').textContent = t(last ? 'btn_finish' : 'btn_next');
-            nextBtn.onclick = last ? showSummary : window.nextRound;
+            setMain(last ? { text: t('btn_finish'), onClick: showSummary } : { text: t('btn_next'), onClick: window.nextRound });
             $('result-sheet').classList.add('show');
             setupResultMap(uLat, aLat);
         }
@@ -1844,7 +1744,7 @@
             Object.keys(guesses).forEach(uid => {
                 const g = guesses[uid];
                 if (uid === STATE.myUid || g.lat == null) return;
-                const m = L.circleMarker([g.lat, g.lng], { radius: 6, color: '#fff', weight: 2, fillColor: '#ef4444', fillOpacity: 1 })
+                const m = L.circleMarker([g.lat, g.lng], { radius: 6, color: '#fff', weight: 2, fillColor: '#ff3b30', fillOpacity: 1 })
                     .bindTooltip(esc(g.name), { permanent: true, direction: 'top', className: 'opp-tip', offset: [0, -6] })
                     .addTo(map);
                 oppMarkers.push(m);
@@ -1859,42 +1759,37 @@
             list.innerHTML = '';
             Object.keys(guesses).map(uid => ({ uid, ...guesses[uid] })).sort((a, b) => b.pts - a.pts).forEach((g, i) => {
                 const r = document.createElement('div');
-                r.className = 'res-mp-row' + (g.uid === STATE.myUid ? ' me' : '');
-                r.innerHTML = `<span class="rank">${['🥇', '🥈', '🥉'][i] || i + 1}</span><span class="nm">${esc(g.name)}</span><span class="pts">+${fmt(g.pts)}</span>`;
+                r.className = 'row';
+                r.innerHTML = `<span class="row-flag" style="font-size:20px;">${['🥇', '🥈', '🥉'][i] || i + 1}</span><div class="row-body"><div class="row-title"${g.uid === STATE.myUid ? ' style="font-weight:600;"' : ''}>${esc(g.name)}</div></div><span class="pts">+${fmt(g.pts)}</span>`;
                 list.appendChild(r);
             });
 
-            const nextBtn = $('next-btn');
             if (STATE.mpRole === 'host') {
-                nextBtn.disabled = false;
-                nextBtn.querySelector('.btn-label').textContent = t('btn_next');
-                nextBtn.onclick = window.nextRound;
+                setMain({ text: t('btn_next'), onClick: window.nextRound });
                 get(ref(db, `games/${STATE.gameId}/players`)).then(snap => {
                     const p = snap.val() || {};
                     Object.keys(guesses).forEach(uid => { if (p[uid]) p[uid].score = (p[uid].score || 0) + guesses[uid].pts; });
                     update(ref(db, `games/${STATE.gameId}/players`), p);
                 });
             } else {
-                nextBtn.disabled = true;
-                nextBtn.querySelector('.btn-label').textContent = t('btn_waiting_host');
+                setMain({ text: t('btn_waiting_host'), active: false });
             }
             $('result-sheet').classList.add('show');
             setupResultMap(myLat, actual);
         }
 
         function setupResultMap(uLat, aLat) {
-            $('guess-fab').classList.add('hidden');
             const ms = $('map-sheet');
             ms.classList.remove('expanded');
             ms.classList.add('open', 'result-mode');
 
-            resultMarker = L.marker(aLat, { icon: pinIcon('#22c55e'), zIndexOffset: 1000 }).addTo(map);
-            if (uLat) resultLine = L.polyline([uLat, aLat], { color: '#1e293b', weight: 3, dashArray: '6 8', opacity: 0.85 }).addTo(map);
+            resultMarker = L.marker(aLat, { icon: pinIcon('#34c759'), zIndexOffset: 1000 }).addTo(map);
+            if (uLat) resultLine = L.polyline([uLat, aLat], { color: '#1c1c1e', weight: 2.5, dashArray: '6 7', opacity: 0.8 }).addTo(map);
 
             setTimeout(() => {
                 map.invalidateSize();
                 const sheetH = $('result-sheet').offsetHeight;
-                const top = (parseInt(getComputedStyle($('hud')).top) || 0) + 60;
+                const top = (parseInt(getComputedStyle($('hud')).top) || 0) + 56;
                 const points = [aLat];
                 if (uLat) points.push(uLat);
                 oppMarkers.forEach(m => points.push(m.getLatLng()));
@@ -1904,14 +1799,11 @@
                     map.setView(aLat, 6);
                     map.panBy([0, sheetH / 2], { animate: false });
                 }
-            }, 80);
+            }, 120);
         }
 
         window.nextRound = () => {
-            const btn = $('next-btn');
-            btn.classList.add('loading');
-            haptic('light');
-
+            mainProgress();
             if (STATE.mode === 'endless' || STATE.mode === 'challenge') {
                 STATE.round++;
                 updateHUD();
@@ -1922,7 +1814,7 @@
                     status: 'next_round', round: nextR, guesses: null, forceEndRound: null
                 }).then(() => pickRandomLocation()).then(loc => {
                     update(ref(db, `games/${STATE.gameId}`), { location: loc, status: 'playing' });
-                }).catch(() => { btn.classList.remove('loading'); toast(t('msg_net_error')); });
+                }).catch(() => { setMain({ text: t('btn_next'), onClick: window.nextRound }); toast(t('msg_net_error')); });
             }
         };
 
@@ -1941,17 +1833,15 @@
 
             const list = $('summary-rounds');
             list.innerHTML = '';
-            rounds.forEach((r, i) => {
+            rounds.forEach(r => {
                 const row = document.createElement('div');
-                row.className = 'sum-row';
-                row.innerHTML = `<span class="r">${i + 1}</span><span class="l">${r.flag} ${esc(r.loc)}<div class="d">${r.missed ? t('lbl_missed') : formatDist(r.dist)}</div></span><span class="pts">+${fmt(r.pts)}</span>`;
+                row.className = 'row';
+                row.innerHTML = `<span class="row-flag">${r.flag || '📍'}</span><div class="row-body"><div class="row-title">${esc(r.loc)}</div><div class="row-sub">${r.missed ? t('lbl_missed') : formatDist(r.dist)}</div></div><span class="pts">+${fmt(r.pts)}</span>`;
                 list.appendChild(row);
             });
 
-            $('summary-modal').classList.remove('hidden');
-            $('summary-modal').scrollTop = 0;
-            STATE.screen = 'summary';
-            if (tgv('6.2')) TG.disableClosingConfirmation();
+            resetMapUI();
+            showScreen('summary-modal');
             animateNumber($('final-score'), STATE.score, 1200);
             haptic('success');
             if (avg >= 2500) confetti({ particleCount: 200, spread: 100, zIndex: 9999 });
@@ -1962,17 +1852,23 @@
         window.exitGame = async () => {
             if (STATE.mode === 'multi') { window.leaveLobby(); return; }
             if (STATE.mode === 'challenge' && !(await tgConfirm(t('msg_exit_confirm')))) return;
-            if (STATE.mode === 'endless' && STATE.roundResults.length > 0) { resetMapUI(); showSummary(); return; }
+            if (STATE.mode === 'endless' && STATE.roundResults.length > 0) { showSummary(); return; }
             window.showMainMenu();
         };
 
         // ==================== MULTIPLAYER ====================
         window.openFriendMenu = () => { haptic('light'); showScreen('party-screen'); };
 
+        function updatePartyMain() {
+            const ok = $('join-code').value.length === 5;
+            setMain(ok ? { text: t('btn_join'), onClick: window.joinRoom } : { text: t('btn_enter_code'), active: false });
+        }
+
         window.createRoom = () => {
             const btn = $('btn-create');
-            if (btn.classList.contains('loading')) return;
-            btn.classList.add('loading');
+            const spin = btn.querySelector('.spinner');
+            if (!spin.classList.contains('hidden')) return;
+            spin.classList.remove('hidden');
             const code = Math.floor(10000 + Math.random() * 90000).toString();
 
             const initialData = {
@@ -1983,37 +1879,37 @@
             };
 
             set(ref(db, 'games/' + code), initialData).then(() => {
-                btn.classList.remove('loading');
+                spin.classList.add('hidden');
                 STATE.gameId = code;
                 STATE.mpRole = 'host';
                 STATE.mode = 'multi';
                 enterLobby(code);
-            }).catch(() => { btn.classList.remove('loading'); toast(t('msg_net_error')); });
+            }).catch(() => { spin.classList.add('hidden'); toast(t('msg_net_error')); });
         };
 
+        let joining = false;
         window.joinRoom = () => {
             const code = $('join-code').value;
-            if (code.length !== 5) return;
-            const btn = $('btn-join');
-            if (btn.classList.contains('loading')) return;
-            btn.classList.add('loading');
-            connectToRoom(code, btn);
+            if (code.length !== 5 || joining) return;
+            joining = true;
+            mainProgress();
+            connectToRoom(code);
         };
 
-        function connectToRoom(code, btn) {
+        function connectToRoom(code) {
+            const done = () => { joining = false; if (STATE.screen === 'party-screen') updatePartyMain(); };
             get(ref(db, 'games/' + code)).then((snap) => {
-                if (btn) btn.classList.remove('loading');
-                if (!snap.exists()) { haptic('error'); tgAlert(t('msg_room_not_found')); return; }
+                if (!snap.exists()) { done(); haptic('error'); tgAlert(t('msg_room_not_found')); return; }
                 const data = snap.val();
                 if (Object.keys(data.players || {}).length >= 20 && !(data.players || {})[STATE.myUid]) {
-                    haptic('error'); tgAlert(t('msg_room_full')); return;
+                    done(); haptic('error'); tgAlert(t('msg_room_full')); return;
                 }
                 STATE.gameId = code;
                 STATE.mpRole = data.host === STATE.myUid ? 'host' : 'guest';
                 STATE.mode = 'multi';
                 update(ref(db, `games/${code}/players/${STATE.myUid}`), { name: STATE.myName, score: 0, avatar: '👤' })
-                    .then(() => enterLobby(code));
-            }).catch(() => { if (btn) btn.classList.remove('loading'); toast(t('msg_net_error')); });
+                    .then(() => { joining = false; enterLobby(code); });
+            }).catch(() => { done(); toast(t('msg_net_error')); });
         }
 
         function parseRoomCode(text) {
@@ -2030,7 +1926,6 @@
                     TG.closeScanQrPopup();
                     if (code) {
                         $('join-code').value = code;
-                        $('btn-join').disabled = false;
                         window.joinRoom();
                     } else {
                         haptic('error');
@@ -2045,19 +1940,22 @@
 
         function roomLink(code) { return `${BOT_APP_LINK}?startapp=${code}`; }
 
+        let lobbyPlayers = 1;
+        function updateLobbyMain() {
+            if (STATE.mpRole !== 'host') { setMain(null); return; }
+            setMain({ text: `${t('btn_start_game')} · ${lobbyPlayers}`, onClick: window.hostStartGame });
+        }
+
         function enterLobby(code) {
             haptic('success');
             STATE.currentLoc = null;
             STATE.round = 1;
-            showScreen('lobby-screen');
             $('lobby-code-display').textContent = code;
             $('lobby-qr-container').innerHTML = "";
             // The QR holds a deep link, so even a regular phone camera opens the app straight into this room.
-            new QRCode($('lobby-qr-container'), { text: roomLink(code), width: 300, height: 300, correctLevel: QRCode.CorrectLevel.M });
-
-            const isHost = STATE.mpRole === 'host';
-            $('host-actions').classList.toggle('hidden', !isHost);
-            $('lobby-status').classList.toggle('hidden', isHost);
+            new QRCode($('lobby-qr-container'), { text: roomLink(code), width: 320, height: 320, correctLevel: QRCode.CorrectLevel.M });
+            $('lobby-status').classList.toggle('hidden', STATE.mpRole === 'host');
+            showScreen('lobby-screen');
             listenToLobby(code);
         }
 
@@ -2078,11 +1976,12 @@
         window.inviteFriends = () => {
             const text = t('msg_invite_text').replace('{c}', STATE.gameId);
             const url = `https://t.me/share/url?url=${encodeURIComponent(roomLink(STATE.gameId))}&text=${encodeURIComponent(text)}`;
-            if (TG && tgv('6.1')) TG.openTelegramLink(url); else window.open(url, '_blank');
+            if (IN_TG) TG.openTelegramLink(url); else window.open(url, '_blank');
         };
 
         window.hostStartGame = () => {
             haptic('medium');
+            mainProgress();
             update(ref(db, `games/${STATE.gameId}`), { status: 'starting' });
         };
 
@@ -2110,17 +2009,14 @@
                 }
                 renderPlayerList(data.players, data.host);
 
-                if (!gameStarted && (data.status === 'starting' || data.status === 'playing' || data.status === 'next_round' || data.status === 'results')) {
+                if (!gameStarted && ['starting', 'playing', 'next_round', 'results'].includes(data.status)) {
                     gameStarted = true;
                     showScreen('game');
                     updateHUD();
-                    setConfirm('idle');
+                    showLoading(t('lbl_finding'));
                     if (STATE.mpRole === 'host' && data.status === 'starting') {
                         update(ref(db, `games/${code}`), { status: 'playing' });
-                        showLoading(t('lbl_finding'));
                         pickRandomLocation().then(loc => update(ref(db, `games/${code}`), { location: loc }));
-                    } else if (!data.location) {
-                        showLoading(t('lbl_finding'));
                     }
                     listenToGame(code);
                 }
@@ -2131,17 +2027,19 @@
             const list = $('player-list');
             list.innerHTML = '';
             const ids = Object.keys(players).sort((a, b) => (b === hostId) - (a === hostId));
+            lobbyPlayers = ids.length;
             $('player-count').textContent = ids.length;
             ids.forEach(uid => {
                 const p = players[uid];
                 const div = document.createElement('div');
-                div.className = 'player-item';
-                let badges = '';
-                if (uid === hostId) badges += `<span class="badge">👑 ${t('lbl_host_badge')}</span>`;
-                if (uid === STATE.myUid) badges += `<span class="badge you">${t('lbl_you')}</span>`;
-                div.innerHTML = `<div class="avatar sm">${esc(initials(p.name))}</div><span class="player-name">${esc(p.name)}</span>${badges}`;
+                div.className = 'row';
+                let tags = '';
+                if (uid === hostId) tags += `<span class="tag">👑 ${t('lbl_host_badge')}</span>`;
+                if (uid === STATE.myUid) tags += `<span class="tag accent">${t('lbl_you')}</span>`;
+                div.innerHTML = `<div class="avatar sm ${avatarColor(uid)}">${esc(initials(p.name))}</div><div class="row-body"><div class="row-title">${esc(p.name)}</div></div>${tags}`;
                 list.appendChild(div);
             });
+            if (STATE.screen === 'lobby-screen') updateLobbyMain();
         }
 
         function listenToGame(code) {
@@ -2185,7 +2083,7 @@
             Object.keys(players).map(uid => ({ uid, ...players[uid] })).sort((a, b) => (b.score || 0) - (a.score || 0)).forEach((p, i) => {
                 const div = document.createElement('div');
                 div.className = 'mp-row' + (p.uid === STATE.myUid ? ' me' : '');
-                div.innerHTML = `<span>${i + 1}. ${esc(p.name)}</span><span class="pts">${fmt(p.score || 0)}</span>`;
+                div.innerHTML = `<span>${i + 1}. ${esc(p.name)}</span><span>${fmt(p.score || 0)}</span>`;
                 container.appendChild(div);
                 if (p.uid === STATE.myUid) $('score-me').textContent = fmt(p.score || 0);
             });
@@ -2202,18 +2100,16 @@
             showScreen('profile-screen');
             $('pf-name').textContent = STATE.myName;
             setAvatar($('pf-avatar'));
-            $('pf-total-games').textContent = fmt(STATE.totalGames);
-            $('pf-total-score').textContent = fmt(STATE.totalScore);
-            const best = STATE.history.reduce((m, h) => Math.max(m, h.pts || 0), 0);
-            $('pf-best').textContent = best ? fmt(best) : '—';
-
-            const XP_PER_LEVEL = 10000;
-            const level = Math.floor(STATE.totalScore / XP_PER_LEVEL) + 1;
-            const into = STATE.totalScore % XP_PER_LEVEL;
-            $('pf-level').textContent = t('lbl_level').replace('{l}', level);
+            const { level, into } = levelInfo();
+            $('pf-level').textContent = t('lbl_level_xp').replace('{l}', level).replace('{x}', fmt(STATE.totalScore));
             $('pf-level-next').textContent = `${fmt(into)} / ${fmt(XP_PER_LEVEL)} XP`;
             $('pf-level-bar').style.width = '0';
             requestAnimationFrame(() => requestAnimationFrame(() => $('pf-level-bar').style.width = (into / XP_PER_LEVEL * 100) + '%'));
+            $('pf-total-games').textContent = fmt(STATE.totalGames);
+            $('pf-total-score').textContent = fmt(STATE.totalScore);
+            $('pf-avg').textContent = STATE.totalGames ? fmt(STATE.totalScore / STATE.totalGames) : '—';
+            const best = bestRound();
+            $('pf-best').textContent = best ? fmt(best) : '—';
 
             const list = $('history-list');
             list.innerHTML = '';
@@ -2221,8 +2117,8 @@
             if (!items.length) { list.innerHTML = `<div class="empty">${t('lbl_no_history')}</div>`; return; }
             items.forEach(h => {
                 const d = document.createElement('div');
-                d.className = 'history-item';
-                d.innerHTML = `<div class="history-main"><div class="history-loc">${esc(h.flag || '📍')} ${esc(h.loc)}</div><div class="history-date">${esc(h.date)}</div></div><span class="pts">+${fmt(h.pts)}</span>`;
+                d.className = 'row';
+                d.innerHTML = `<span class="row-flag">${esc(h.flag || '📍')}</span><div class="row-body"><div class="row-title">${esc(h.loc)}</div><div class="row-sub">${esc(h.date)}</div></div><span class="pts">+${fmt(h.pts)}</span>`;
                 list.appendChild(d);
             });
         };
@@ -2237,7 +2133,7 @@
         window.shareResult = () => {
             const msg = t('msg_share_text').replace('{s}', fmt(STATE.score));
             const url = `https://t.me/share/url?url=${encodeURIComponent(BOT_APP_LINK)}&text=${encodeURIComponent(msg)}`;
-            if (TG && tgv('6.1')) TG.openTelegramLink(url); else window.open(url, '_blank');
+            if (IN_TG) TG.openTelegramLink(url); else window.open(url, '_blank');
         };
 
         init();
