@@ -268,6 +268,8 @@
             height: 50px; border: none; border-radius: 12px; background: var(--accent); color: var(--accent-text);
             font-size: 17px; font-weight: 600; cursor: pointer;
         }
+        body.game-active #mb-fallback { background: transparent; pointer-events: none; }
+        body.game-active #mb-fallback button { pointer-events: auto; box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
         #mb-fallback button:disabled { opacity: 0.45; cursor: default; }
         .spinner { width: 20px; height: 20px; border-radius: 50%; border: 2.5px solid currentColor; border-right-color: transparent; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -1269,12 +1271,17 @@
         }
 
         // ==================== MAIN BUTTON ====================
-        // One primary action per screen. Inside Telegram it is the native MainButton;
-        // in a regular browser an equivalent button is pinned to the bottom of the page.
+        // One primary action per screen. In Telegram menus it is the native MainButton.
+        // During a game (and in a regular browser) an in-page button is used instead, so the
+        // Guess / Confirm / Next buttons are always on screen no matter the Telegram client.
         let mainAction = null;
         function setMain(opts) {
             mainAction = opts && opts.active !== false ? opts.onClick : null;
-            if (IN_TG) {
+            const native = IN_TG && STATE.screen !== 'game';
+            if (IN_TG && !native) { TG.MainButton.hideProgress(); TG.MainButton.hide(); }
+            if (native) {
+                document.body.classList.remove('mb-fb');
+                $('mb-fallback').classList.add('hidden');
                 const m = TG.MainButton;
                 if (!opts) { m.hideProgress(); m.hide(); return; }
                 const tp = TG.themeParams || {};
@@ -1624,7 +1631,14 @@
         }
 
         function loadLocation(loc, s = STATE.session) {
+            // If the viewer never reports back, don't leave the player stuck without controls.
+            const stuck = setTimeout(() => {
+                if (s !== STATE.session || $('loading').classList.contains('hidden')) return;
+                hideLoading();
+                guessMain();
+            }, 12000);
             mly.moveTo(loc.id)
+                .finally(() => clearTimeout(stuck))
                 .then(() => {
                     if (s !== STATE.session) return;
                     hideLoading();
@@ -1635,6 +1649,7 @@
                 .catch(() => {
                     if (s !== STATE.session) return;
                     if (STATE.mode === 'multi') { hideLoading(); guessMain(); return; }
+                    if (++loadFailures >= 4) { loadFailures = 0; tgAlert(t('msg_no_locations')); window.showMainMenu(); return; }
                     pickRandomLocation().then(l => {
                         if (s !== STATE.session) return;
                         STATE.currentLoc = l;
