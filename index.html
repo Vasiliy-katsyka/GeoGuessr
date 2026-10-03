@@ -2,507 +2,767 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GeoGuessr Ultimate</title>
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0b0f17">
+    <title>GeoGuessr</title>
+
     <!-- Telegram Web App -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
-        if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.ready();
+        (function () {
+            const tg = window.Telegram && window.Telegram.WebApp;
+            if (!tg) return;
+            const v = (x) => tg.isVersionAtLeast && tg.isVersionAtLeast(x);
             try {
-                window.Telegram.WebApp.requestFullscreen(); 
-                window.Telegram.WebApp.expand();
-                window.Telegram.WebApp.disableVerticalSwipes();
-            } catch (e) { console.log("Telegram FS failed", e); }
-        }
+                tg.ready();
+                tg.expand();
+                // Fullscreen only makes sense on phones; on desktop it would take over the whole window.
+                if (['android', 'ios'].includes(tg.platform) && v('8.0')) tg.requestFullscreen();
+                if (v('7.7')) tg.disableVerticalSwipes();
+                if (v('6.1')) { tg.setHeaderColor('#0b0f17'); tg.setBackgroundColor('#0b0f17'); }
+                if (v('7.10')) tg.setBottomBarColor('#0b0f17');
+            } catch (e) { console.log('Telegram init failed', e); }
+        })();
     </script>
 
     <!-- External Libs -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link href="https://unpkg.com/mapillary-js@4.1.0/dist/mapillary.css" rel="stylesheet" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css"/>
-    <script src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/mapillary-js@4.1.0/dist/mapillary.css" />
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
-    <!-- QR Code Generator -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
     <style>
-        /* ==================== THEME & VARS ==================== */
+        /* ==================== TOKENS ==================== */
         :root {
-            --bg-color: #050505;
-            --text-color: #ffffff;
-            --primary-grad: linear-gradient(135deg, #00C6FF 0%, #0072FF 100%);
-            
-            /* PREMIUM GLASS VARIABLES */
-            --glass-bg: rgba(255, 255, 255, 0.03);
-            --glass-border-top: rgba(255, 255, 255, 0.15);
-            --glass-border-bottom: rgba(0, 0, 0, 0.3);
-            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
-            --blur: 40px; 
-            --safe-top: 80px; 
+            --bg: #0b0f17;
+            --surface: #141a26;
+            --surface-2: #1c2433;
+            --surface-3: #252f42;
+            --border: rgba(255, 255, 255, 0.08);
+            --text: #f5f7fb;
+            --muted: #8b95a8;
+            --primary: #3b82f6;
+            --primary-2: #2563eb;
+            --primary-grad: linear-gradient(135deg, #4f8cff 0%, #2563eb 100%);
+            --green: #22c55e;
+            --gold: #fbbf24;
+            --red: #ef4444;
+            --purple: #8b5cf6;
+            --radius: 20px;
+            --radius-sm: 14px;
+
+            /* Telegram fullscreen exposes its own safe-area vars; fall back to the device's. */
+            --safe-top: calc(max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px)) + var(--tg-content-safe-area-inset-top, 0px));
+            --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px));
         }
 
-        body, html { 
-            margin: 0; padding: 0; height: 100%; 
-            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-            background: var(--bg-color); color: var(--text-color);
-            overflow: hidden; -webkit-tap-highlight-color: transparent;
+        * { box-sizing: border-box; }
+
+        html, body {
+            margin: 0; padding: 0; height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg); color: var(--text);
+            overflow: hidden; overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-font-smoothing: antialiased;
         }
 
-        /* NOISE TEXTURE OVERLAY */
-        body::before {
-            content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
-            opacity: 0.4; pointer-events: none; z-index: 1; mix-blend-mode: overlay;
-        }
-
-        /* ==================== ANIMATED BACKGROUND ==================== */
-        .bg-blob {
-            position: absolute; border-radius: 50%;
-            filter: blur(80px); opacity: 0.6; z-index: 0;
-            animation: floatBlob 15s infinite alternate ease-in-out;
-            pointer-events: none;
-        }
-        .blob-1 { top: -10%; left: -10%; width: 350px; height: 350px; background: #0072FF; }
-        .blob-2 { bottom: -10%; right: -20%; width: 400px; height: 400px; background: #7a28e0; animation-delay: -5s; }
-        .blob-3 { top: 40%; left: 30%; width: 300px; height: 300px; background: #00f260; animation-duration: 20s; opacity: 0.3; }
-
-        @keyframes floatBlob {
-            0% { transform: translate(0, 0) scale(1); }
-            100% { transform: translate(30px, 50px) scale(1.1); }
-        }
-
-        /* ==================== PREMIUM GLASS PANEL ==================== */
-        .glass-panel {
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--blur)); -webkit-backdrop-filter: blur(var(--blur));
-            
-            /* 3D Border Effect */
-            border-top: 1px solid var(--glass-border-top);
-            border-left: 1px solid var(--glass-border-top);
-            border-bottom: 1px solid var(--glass-border-bottom);
-            border-right: 1px solid var(--glass-border-bottom);
-            
-            border-radius: 28px;
-            box-shadow: 
-                var(--glass-shadow), 
-                inset 0 0 0 1px rgba(255, 255, 255, 0.05); /* Inner stroke */
-            position: relative; overflow: hidden;
-        }
-        
-        /* Glass Shine Effect */
-        .glass-panel::after {
-            content: ""; position: absolute; top: 0; left: 0; right: 0; height: 40%;
-            background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%);
-            pointer-events: none;
-        }
-
+        button { font: inherit; color: inherit; }
+        svg { flex-shrink: 0; }
         .hidden { display: none !important; }
-        .scrollable { overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
-        /* ==================== UI ELEMENTS ==================== */
-        #settings-btn {
-            position: absolute; top: var(--safe-top); right: 20px; z-index: 6000;
-            width: 44px; height: 44px; 
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 50%; display: flex; justify-content: center; align-items: center;
-            border: 1px solid rgba(255,255,255,0.2); cursor: pointer; font-size: 22px;
-            backdrop-filter: blur(10px);
-            transition: opacity 0.3s;
+        /* ==================== BUTTONS ==================== */
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            min-height: 52px; padding: 0 20px;
+            border: none; border-radius: var(--radius-sm);
+            font-size: 16px; font-weight: 700; cursor: pointer;
+            transition: transform 0.12s ease, opacity 0.2s, background 0.2s;
+            user-select: none; -webkit-user-select: none;
         }
-        body.game-active #settings-btn { opacity: 0; pointer-events: none; }
+        .btn:active:not(:disabled) { transform: scale(0.97); }
+        .btn:disabled { cursor: default; }
+        .btn-block { width: 100%; }
+        .btn-primary { background: var(--primary-grad); color: #fff; box-shadow: 0 8px 24px rgba(37, 99, 235, 0.35); }
+        .btn-primary:disabled { background: var(--surface-3); color: var(--muted); box-shadow: none; }
+        .btn-green { background: linear-gradient(135deg, #34d399 0%, #16a34a 100%); color: #fff; box-shadow: 0 8px 24px rgba(22, 163, 74, 0.3); }
+        .btn-soft { background: var(--surface-2); color: var(--text); }
+        .btn-ghost { background: transparent; color: var(--muted); }
+        .btn-danger-soft { background: rgba(239, 68, 68, 0.12); color: #f87171; }
 
-        /* ==================== MENUS ==================== */
-        .full-screen-menu {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 5000;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            padding: 20px; box-sizing: border-box;
-            background: rgba(0,0,0,0.2);
-            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-            transition: opacity 0.3s ease;
+        .icon-btn {
+            width: 42px; height: 42px; border-radius: 50%;
+            display: inline-flex; align-items: center; justify-content: center;
+            border: none; background: var(--surface-2); color: var(--text); cursor: pointer;
+            transition: transform 0.12s;
+        }
+        .icon-btn:active { transform: scale(0.92); }
+
+        .chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            height: 34px; padding: 0 14px; border-radius: 999px;
+            border: 1px solid var(--border); background: var(--surface-2);
+            font-size: 13px; font-weight: 700; cursor: pointer;
         }
 
-        .menu-title { 
-            font-size: 3.5rem; font-weight: 900; margin-bottom: 5px; margin-top: 10px;
-            background: var(--primary-grad); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-            text-align: center; letter-spacing: -1px; 
-            filter: drop-shadow(0 0 25px rgba(0, 198, 255, 0.4));
-        }
-        .menu-subtitle { font-size: 1rem; color: #bbb; margin-bottom: 30px; text-align: center; font-weight: 500; }
-
-        /* Buttons */
-        .btn-main {
-            width: 100%; max-width: 340px; padding: 18px; margin: 8px 0;
-            border: none; border-radius: 20px; font-size: 1.1rem; font-weight: 700;
-            cursor: pointer; color: white; text-transform: uppercase; letter-spacing: 1px;
-            position: relative; display: flex; align-items: center; justify-content: center; gap: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3); 
-            border: 1px solid rgba(255,255,255,0.1);
-            backdrop-filter: blur(10px);
-            transition: transform 0.1s, box-shadow 0.2s;
-        }
-        .btn-main:active { transform: scale(0.97); }
-        
-        .btn-blue { background: linear-gradient(135deg, rgba(0, 198, 255, 0.8) 0%, rgba(0, 114, 255, 0.8) 100%); }
-        .btn-orange { background: linear-gradient(135deg, #FF512F 0%, #F09819 100%); }
-        .btn-green { background: linear-gradient(135deg, rgba(17, 153, 142, 0.8) 0%, rgba(56, 239, 125, 0.8) 100%); }
-        .btn-purple { background: linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%); } /* New for Country Mode */
-        .btn-dark { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); }
-        .btn-red { background: rgba(255, 75, 75, 0.8); }
-
-        .btn-spinner {
-            width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3);
-            border-top: 3px solid white; border-radius: 50%;
+        .spinner {
+            width: 20px; height: 20px; border-radius: 50%;
+            border: 3px solid rgba(255, 255, 255, 0.3); border-top-color: #fff;
             animation: spin 0.8s linear infinite; display: none;
         }
-        .btn-main.loading .btn-content { display: none; }
-        .btn-main.loading .btn-spinner { display: block; }
+        .btn.loading .btn-label, .btn.loading > svg { display: none; }
+        .btn.loading .spinner { display: block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* ==================== COUNTRY GRID ==================== */
-        #country-grid {
-            display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
-            width: 100%; max-width: 340px; margin-bottom: 20px;
-            max-height: 50vh; overflow-y: auto; padding: 5px;
+        .glass {
+            background: rgba(11, 15, 23, 0.62);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
         }
+
+        /* ==================== SCREENS ==================== */
+        .screen {
+            position: fixed; inset: 0; z-index: 5000;
+            background: var(--bg);
+            overflow-y: auto; -webkit-overflow-scrolling: touch;
+            padding: calc(var(--safe-top) + 12px) 16px calc(var(--safe-bottom) + 24px);
+            animation: fadeIn 0.25s ease;
+        }
+        .screen.has-footer { padding-bottom: calc(var(--safe-bottom) + 170px); }
+        .container { max-width: 480px; margin: 0 auto; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+        .topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; min-height: 42px; }
+        .topbar h2 { margin: 0; font-size: 22px; font-weight: 800; flex: 1; }
+
+        .section-title { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 24px 4px 10px; }
+
+        .card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 18px;
+        }
+
+        /* ==================== HOME ==================== */
+        .home-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+        .profile-chip {
+            display: flex; align-items: center; gap: 10px; min-width: 0;
+            background: none; border: none; padding: 0; cursor: pointer; text-align: left;
+        }
+        .avatar {
+            width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+            background: var(--primary-grad); color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 18px; overflow: hidden;
+        }
+        .avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .avatar.lg { width: 84px; height: 84px; font-size: 34px; }
+        .avatar.sm { width: 34px; height: 34px; font-size: 14px; }
+        .hello { font-size: 13px; color: var(--muted); }
+        .hello-name { font-size: 17px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .hero {
+            position: relative; overflow: hidden;
+            border-radius: 26px; padding: 22px;
+            background: radial-gradient(120% 120% at 100% 0%, #60a5fa 0%, #2563eb 45%, #1e3a8a 100%);
+            box-shadow: 0 20px 50px rgba(37, 99, 235, 0.3);
+        }
+        .hero-lottie { position: absolute; right: -6px; top: -6px; width: 120px; height: 120px; pointer-events: none; }
+        .hero-tag { display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; background: rgba(255,255,255,0.18); padding: 5px 10px; border-radius: 999px; }
+        .hero h1 { font-size: 30px; line-height: 1.1; margin: 14px 0 8px; font-weight: 900; max-width: 70%; }
+        .hero p { margin: 0 0 20px; color: rgba(255,255,255,0.85); font-size: 15px; line-height: 1.4; max-width: 85%; }
+        .hero .btn { background: #fff; color: #1d4ed8; box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
+
+        .mode-list { display: flex; flex-direction: column; gap: 10px; }
+        .mode-card {
+            display: flex; align-items: center; gap: 14px; width: 100%;
+            padding: 16px; border-radius: var(--radius);
+            background: var(--surface); border: 1px solid var(--border);
+            cursor: pointer; text-align: left; transition: transform 0.12s, background 0.2s;
+        }
+        .mode-card:active { transform: scale(0.98); background: var(--surface-2); }
+        .mode-icon { width: 50px; height: 50px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0; }
+        .mode-text { flex: 1; min-width: 0; }
+        .mode-title { font-size: 17px; font-weight: 800; }
+        .mode-desc { font-size: 13px; color: var(--muted); margin-top: 3px; line-height: 1.35; }
+        .chev { color: var(--muted); }
+
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 14px 10px; text-align: center; }
+        .stat-val { font-size: 20px; font-weight: 900; font-variant-numeric: tabular-nums; }
+        .stat-lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+        .how { display: flex; flex-direction: column; gap: 14px; }
+        .how-step { display: flex; gap: 12px; align-items: center; font-size: 14px; color: #cbd2de; }
+        .how-num { width: 28px; height: 28px; border-radius: 50%; background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: var(--primary); flex-shrink: 0; }
+
+        /* ==================== COUNTRY ==================== */
+        .search {
+            display: flex; align-items: center; gap: 10px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); padding: 0 14px; height: 48px; margin-bottom: 14px; color: var(--muted);
+        }
+        .search input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-size: 16px; min-width: 0; }
+        #country-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
         .country-card {
-            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 16px; padding: 15px; text-align: center;
-            cursor: pointer; transition: 0.2s;
+            position: relative;
+            background: var(--surface); border: 2px solid transparent;
+            border-radius: 18px; padding: 14px 6px 12px; text-align: center;
+            cursor: pointer; transition: transform 0.12s, border-color 0.15s, background 0.15s;
         }
-        .country-card:active, .country-card.selected {
-            background: rgba(0, 198, 255, 0.2); border-color: #00C6FF;
+        .country-card:active { transform: scale(0.95); }
+        .country-card.selected { border-color: var(--primary); background: rgba(59, 130, 246, 0.14); }
+        .country-card.selected::after {
+            content: "✓"; position: absolute; top: 6px; right: 8px;
+            width: 20px; height: 20px; border-radius: 50%; background: var(--primary);
+            font-size: 12px; font-weight: 900; line-height: 20px; color: #fff;
         }
-        .c-flag { font-size: 2.5rem; display: block; margin-bottom: 5px; }
-        .c-name { font-size: 0.9rem; font-weight: 600; color: #ddd; }
+        .c-flag { font-size: 36px; display: block; line-height: 1.1; }
+        .c-name { font-size: 13px; font-weight: 600; color: #d6dbe5; margin-top: 6px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .empty { text-align: center; color: var(--muted); padding: 30px 10px; font-size: 14px; }
 
-        /* ==================== MULTIPLAYER UI ==================== */
-        .input-code {
-            display: block; width: 80%; margin: 15px auto; padding: 16px;
-            font-size: 24px; font-weight: 800; text-align: center; letter-spacing: 6px;
-            color: white; background: rgba(0, 0, 0, 0.3); 
-            border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 16px;
-            backdrop-filter: blur(10px); outline: none; text-transform: uppercase;
+        .footer-bar {
+            position: fixed; left: 0; right: 0; bottom: 0; z-index: 5100;
+            padding: 14px 16px calc(var(--safe-bottom) + 14px);
+            background: linear-gradient(180deg, rgba(11,15,23,0) 0%, var(--bg) 22%);
         }
-        
-        #lobby-qr-container {
-            margin: 20px 0; padding: 15px; background: white; border-radius: 16px;
-            display: inline-block; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-        
-        #player-list { 
-            width: 100%; max-width: 340px; max-height: 250px; /* Scrollable for 20 players */
-            overflow-y: auto; margin: 20px 0; padding-right: 5px;
-        }
-        .player-item {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 12px; background: rgba(255,255,255,0.08); margin-bottom: 8px; border-radius: 12px;
-            border: 1px solid rgba(255,255,255,0.05);
-        }
+        .footer-bar .container { display: flex; flex-direction: column; gap: 10px; }
 
-        /* ==================== HUD & MAP ==================== */
-        #top-hud {
-            position: absolute; top: var(--safe-top); left: 0; width: 100%;
-            padding: 0 15px; box-sizing: border-box;
-            display: flex; justify-content: space-between; align-items: flex-start;
-            z-index: 100; pointer-events: none;
+        .segmented { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px; }
+        .segmented button {
+            height: 40px; border: none; background: none; border-radius: 10px;
+            font-size: 14px; font-weight: 700; color: var(--muted); cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
         }
-        #timer-box, #score-box {
-            background: var(--glass-bg); backdrop-filter: blur(20px);
-            border: 1px solid rgba(255,255,255,0.15); border-radius: 16px;
-            padding: 10px 16px; color: white; margin-bottom: 8px;
-            pointer-events: all; box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-        }
-        #timer-box { font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-        
-        #map-container {
-            position: absolute; bottom: 120px; right: 20px;
-            width: 90vw; max-width: 450px; height: 45vh;
-            background: rgba(20, 20, 25, 0.9); 
-            backdrop-filter: blur(40px);
-            border: 1px solid rgba(255,255,255,0.2); border-radius: 28px;
-            box-shadow: 0 30px 80px rgba(0,0,0,0.8); z-index: 200;
-            transform: scale(0); opacity: 0; pointer-events: none;
-            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-            display: flex; flex-direction: column; padding: 8px; box-sizing: border-box;
-        }
-        #map-container.open { transform: scale(1); opacity: 1; pointer-events: all; }
-        
-        #map-container.map-result-mode {
-            bottom: 0 !important; right: 0 !important; width: 100% !important; height: 100% !important;
-            border-radius: 0 !important; background: #1a1a1a; padding: 0; max-width: none; z-index: 10;
-        }
-        #map { 
-            flex-grow: 1; 
-            width: 100%; 
-            border-radius: 22px; 
-            cursor: crosshair; /* Adds the Plus cursor */
-        }
+        .segmented button.active { background: var(--surface-3); color: var(--text); }
 
-        #confirm-btn {
-            width: 100%; padding: 16px; margin-top: 8px;
-            background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.4);
-            font-weight: 800; border: none; text-transform: uppercase;
-            border-radius: 16px; cursor: not-allowed; transition: 0.3s;
+        /* ==================== PARTY ==================== */
+        .party-card { display: flex; flex-direction: column; gap: 14px; }
+        .party-head { display: flex; align-items: center; gap: 14px; }
+        .party-head h3 { margin: 0; font-size: 18px; }
+        .party-head p { margin: 3px 0 0; font-size: 13px; color: var(--muted); }
+        .code-input {
+            width: 100%; height: 64px; text-align: center;
+            font-size: 30px; font-weight: 900; letter-spacing: 0.4em; padding-left: 0.4em;
+            background: var(--bg); color: var(--text);
+            border: 2px solid var(--border); border-radius: var(--radius-sm); outline: none;
+            font-variant-numeric: tabular-nums; transition: border-color 0.2s;
         }
-        #confirm-btn.active { 
-            background: var(--primary-grad); color: white; cursor: pointer; 
-            box-shadow: 0 5px 20px rgba(0, 198, 255, 0.4);
-        }
+        .code-input:focus { border-color: var(--primary); }
+        .code-input::placeholder { color: #3a4458; }
+        .divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+        .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 
+        /* ==================== LOBBY ==================== */
+        .lobby-code-card { text-align: center; }
+        .lobby-label { font-size: 13px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+        #lobby-code-display { font-size: 48px; font-weight: 900; letter-spacing: 0.18em; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
+        #lobby-qr-container { display: inline-block; margin: 12px auto 10px; padding: 12px; background: #fff; border-radius: 18px; line-height: 0; }
+        #lobby-qr-container img, #lobby-qr-container canvas { width: 150px !important; height: 150px !important; }
+        .lobby-hint { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+        .row { display: flex; gap: 10px; }
+        .row > * { flex: 1; }
+        #player-list { display: flex; flex-direction: column; gap: 8px; }
+        .player-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; }
+        .player-name { flex: 1; font-weight: 600; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .badge { font-size: 11px; font-weight: 800; padding: 4px 8px; border-radius: 999px; background: rgba(251, 191, 36, 0.15); color: var(--gold); text-transform: uppercase; }
+        .badge.you { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+        .waiting-note { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: 14px; height: 52px; }
+        .pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--green); animation: pulse 1.4s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.6); } 100% { box-shadow: 0 0 0 12px rgba(34,197,94,0); } }
+
+        /* ==================== PROFILE ==================== */
+        .profile-top { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; margin-bottom: 8px; }
+        .profile-top h3 { margin: 4px 0 0; font-size: 22px; }
+        .level-card { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+        .level-row { display: flex; justify-content: space-between; align-items: baseline; }
+        .level-row b { font-size: 18px; }
+        .level-row span { font-size: 13px; color: var(--muted); }
+        .bar { height: 10px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+        .bar > div { height: 100%; width: 0; border-radius: 999px; background: var(--primary-grad); transition: width 0.9s cubic-bezier(0.2, 0.8, 0.2, 1); }
+        .bar.gold > div { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+        #history-list { display: flex; flex-direction: column; }
+        .history-item { display: flex; align-items: center; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--border); }
+        .history-item:last-child { border-bottom: none; }
+        .history-main { flex: 1; min-width: 0; }
+        .history-loc { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .history-date { font-size: 12px; color: var(--muted); margin-top: 2px; }
+        .pts { font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+        /* ==================== GAME: STREET VIEW & HUD ==================== */
+        #mly { position: fixed; inset: 0; z-index: 1; background: #000; }
+
+        #hud {
+            position: fixed; left: 0; right: 0; top: calc(var(--safe-top) + 10px); z-index: 260;
+            padding: 0 12px; pointer-events: none; display: none;
+        }
+        body.game-active #hud { display: block; }
+        .hud-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+        .hud-row > * { pointer-events: auto; }
+        #exit-btn { width: 44px; height: 44px; background: rgba(11,15,23,0.62); }
+        .hud-center { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+        .hud-pill { padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 700; text-align: center; white-space: nowrap; }
+        #mode-label { display: block; font-size: 11px; color: rgba(255,255,255,0.65); font-weight: 600; }
+        #timer-box { font-size: 18px; font-weight: 900; font-variant-numeric: tabular-nums; padding: 6px 16px; }
+        #timer-box.warn { color: #fff; background: rgba(239, 68, 68, 0.85); border-color: rgba(255,255,255,0.3); animation: throb 1s infinite; }
+        @keyframes throb { 50% { transform: scale(1.06); } }
+        #score-box { display: flex; flex-direction: column; align-items: flex-end; padding: 6px 14px; border-radius: 16px; cursor: pointer; min-width: 74px; }
+        .hud-score-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255,255,255,0.65); }
+        #score-me { font-size: 18px; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; }
+        #mp-scores {
+            pointer-events: auto; margin: 8px 0 0 auto; width: 170px; padding: 8px 10px; border-radius: 14px;
+            display: flex; flex-direction: column; gap: 4px; font-size: 12px; max-height: 40vh; overflow-y: auto;
+        }
+        #mp-scores.collapsed .mp-row:nth-child(n+4) { display: none; }
+        .mp-row { display: flex; justify-content: space-between; gap: 8px; }
+        .mp-row span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .mp-row.me { color: #93c5fd; font-weight: 700; }
+        #host-controls { pointer-events: auto; display: flex; justify-content: center; margin-top: 8px; }
+        .chip-danger { background: rgba(239, 68, 68, 0.85); border-color: rgba(255,255,255,0.2); color: #fff; }
+
+        #guess-fab {
+            position: fixed; z-index: 120; left: 50%; transform: translateX(-50%);
+            bottom: calc(var(--safe-bottom) + 24px);
+            min-height: 58px; padding: 0 30px; border-radius: 999px; font-size: 17px;
+            display: none;
+        }
+        body.game-active #guess-fab:not(.hidden) { display: inline-flex; }
+        #guess-fab:active { transform: translateX(-50%) scale(0.96); }
+
+        /* ==================== MAP SHEET ==================== */
+        #map-sheet {
+            position: fixed; left: 0; right: 0; bottom: 0; z-index: 200;
+            height: 62vh; height: 62dvh;
+            background: var(--surface); border-radius: 26px 26px 0 0;
+            box-shadow: 0 -20px 50px rgba(0,0,0,0.5);
+            display: flex; flex-direction: column; gap: 10px;
+            padding: 8px 12px calc(var(--safe-bottom) + 12px);
+            transform: translateY(105%); transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1), height 0.3s ease;
+        }
+        #map-sheet.open { transform: translateY(0); }
+        #map-sheet.expanded { height: calc(100vh - var(--safe-top) - 70px); height: calc(100dvh - var(--safe-top) - 70px); }
+        .sheet-grabber { width: 40px; height: 5px; border-radius: 3px; background: var(--surface-3); margin: 0 auto; flex-shrink: 0; }
+        .sheet-head { display: flex; align-items: center; gap: 8px; padding: 0 2px; }
+        .sheet-head .sheet-title { flex: 1; font-size: 17px; font-weight: 800; }
+        .sheet-head .icon-btn { width: 38px; height: 38px; }
+        #map { flex: 1; width: 100%; border-radius: 18px; background: #aad3df; z-index: 0; }
+        #map-sheet.result-mode {
+            top: 0; height: auto; border-radius: 0; padding: 0; gap: 0; z-index: 150;
+            transform: none; transition: none; box-shadow: none;
+        }
+        #map-sheet.result-mode #map { border-radius: 0; }
+        #map-sheet.result-mode .sheet-grabber, #map-sheet.result-mode .sheet-head, #map-sheet.result-mode #confirm-btn { display: none; }
+
+        .pin-icon { background: none; border: none; }
+        .pin-icon svg { filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4)); }
+        .leaflet-tooltip.opp-tip { background: rgba(11,15,23,0.85); color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 11px; padding: 3px 7px; box-shadow: none; }
+        .leaflet-tooltip.opp-tip::before { display: none; }
+        .leaflet-control-attribution { font-size: 9px; }
+
+        /* ==================== RESULT SHEET ==================== */
         #result-sheet {
-            position: absolute; bottom: 0; left: 0; width: 100%;
-            background: rgba(10, 10, 15, 0.95); 
-            backdrop-filter: blur(50px);
-            border-top: 1px solid rgba(255,255,255,0.2);
-            border-radius: 35px 35px 0 0;
-            z-index: 3000; transform: translateY(110%); transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
-            padding: 30px 25px 50px 25px; box-sizing: border-box;
-            display: flex; flex-direction: column; gap: 15px; color: white;
-            box-shadow: 0 -15px 60px rgba(0,0,0,0.8);
+            position: fixed; left: 0; right: 0; bottom: 0; z-index: 3000;
+            background: var(--surface); border-radius: 28px 28px 0 0;
+            box-shadow: 0 -20px 60px rgba(0,0,0,0.6);
+            padding: 10px 18px calc(var(--safe-bottom) + 18px);
+            transform: translateY(110%); transition: transform 0.45s cubic-bezier(0.19, 1, 0.22, 1);
+            max-height: 70vh; overflow-y: auto;
         }
         #result-sheet.show { transform: translateY(0); }
-        
-        /* Mobile Toggle Button */
-        #mobile-map-toggle {
-            position: absolute; bottom: 35px; right: 20px;
-            width: 65px; height: 65px; border-radius: 50%;
-            background: var(--primary-grad); color: white;
-            font-size: 28px; border: 3px solid rgba(255,255,255,0.2);
-            z-index: 100; display: flex; justify-content: center; align-items: center;
-            box-shadow: 0 15px 40px rgba(0,0,0,0.6);
-            transition: transform 0.2s;
-        }
+        #result-sheet .container { display: flex; flex-direction: column; gap: 14px; }
+        .res-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 8px; }
+        #res-pts { font-size: 44px; font-weight: 900; line-height: 1; color: var(--gold); font-variant-numeric: tabular-nums; }
+        .res-pts-lbl { font-size: 13px; color: var(--muted); font-weight: 600; margin-top: 4px; }
+        #res-dist { font-size: 20px; font-weight: 800; text-align: right; }
+        #res-dist-lbl { font-size: 13px; color: var(--muted); text-align: right; }
+        .res-loc { display: flex; align-items: center; gap: 12px; background: var(--surface-2); border-radius: 16px; padding: 12px 14px; }
+        .res-loc-flag { font-size: 30px; line-height: 1; }
+        .res-loc-lbl { font-size: 12px; color: var(--muted); }
+        #res-loc-name { font-weight: 700; font-size: 16px; }
+        #res-mp-list { display: flex; flex-direction: column; gap: 6px; }
+        .res-mp-row { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+        .res-mp-row .rank { width: 22px; color: var(--muted); font-weight: 800; text-align: center; }
+        .res-mp-row .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+        .res-mp-row.me .nm { color: #93c5fd; }
+        .res-actions { display: flex; gap: 10px; }
+        .res-actions .btn-soft { width: 56px; padding: 0; flex-shrink: 0; }
+        .res-actions .btn-primary { flex: 1; }
 
-        /* Loading & Utility */
+        /* ==================== SUMMARY ==================== */
+        #summary-modal {
+            position: fixed; inset: 0; z-index: 7000; background: var(--bg);
+            overflow-y: auto; padding: calc(var(--safe-top) + 24px) 16px calc(var(--safe-bottom) + 24px);
+            display: flex; flex-direction: column; justify-content: center;
+            animation: fadeIn 0.3s ease;
+        }
+        .summary-head { text-align: center; }
+        .summary-emoji { font-size: 64px; line-height: 1; }
+        #summary-title { margin: 12px 0 4px; font-size: 26px; font-weight: 900; }
+        #final-score { font-size: 64px; font-weight: 900; line-height: 1.1; background: linear-gradient(135deg, #fde68a, #f59e0b); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; font-variant-numeric: tabular-nums; }
+        .summary-sub { color: var(--muted); font-size: 14px; }
+        #summary-rounds { margin: 20px 0; display: flex; flex-direction: column; gap: 8px; }
+        .sum-row { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; }
+        .sum-row .r { width: 26px; height: 26px; border-radius: 50%; background: var(--surface-2); font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; color: var(--muted); flex-shrink: 0; }
+        .sum-row .l { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .sum-row .d { font-size: 12px; color: var(--muted); font-weight: 500; }
+        .summary-actions { display: flex; flex-direction: column; gap: 10px; }
+
+        /* ==================== LOADING & TOAST ==================== */
         #loading {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: #050505; z-index: 8000;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            position: fixed; inset: 0; z-index: 8000; background: var(--bg);
+            display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px;
         }
+        #load-text { color: var(--muted); font-weight: 600; font-size: 15px; margin: 0; }
+        #loading .btn { margin-top: 18px; display: none; }
+        body.game-active #loading .btn { display: inline-flex; }
 
-        /* ==================== PREMIUM SLIDER ==================== */
-        input[type=range] {
-            -webkit-appearance: none;
-            width: 100%;
-            background: transparent;
-            margin: 10px 0;
+        #toast {
+            position: fixed; left: 50%; top: calc(var(--safe-top) + 64px); z-index: 9000;
+            transform: translate(-50%, -20px); opacity: 0; pointer-events: none;
+            background: rgba(28, 36, 51, 0.96); border: 1px solid var(--border);
+            padding: 12px 18px; border-radius: 14px; font-size: 14px; font-weight: 600;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4); transition: all 0.25s ease; max-width: 90vw; text-align: center;
         }
-        input[type=range]:focus { outline: none; }
-        input[type=range]::-webkit-slider-runnable-track {
-            width: 100%; height: 8px;
-            cursor: pointer;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 4px;
-        }
-        input[type=range]::-webkit-slider-thumb {
-            height: 24px; width: 24px;
-            border-radius: 50%;
-            background: var(--primary-grad);
-            cursor: pointer;
-            -webkit-appearance: none;
-            margin-top: -8px;
-            box-shadow: 0 0 15px rgba(0, 198, 255, 0.8);
-            border: 2px solid white;
-            transition: transform 0.1s;
-        }
-        input[type=range]::-webkit-slider-thumb:active {
-            transform: scale(1.2);
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+        @media (min-width: 420px) { #country-grid { grid-template-columns: repeat(4, 1fr); } }
     </style>
 </head>
 <body>
 
-    <!-- Background Blobs -->
-    <div class="bg-blob blob-1"></div>
-    <div class="bg-blob blob-2"></div>
-    <div class="bg-blob blob-3"></div>
-
-    <!-- SETTINGS -->
-    <button id="settings-btn" onclick="window.toggleLanguage()">🌐</button>
+    <!-- STREET VIEW -->
+    <div id="mly"></div>
 
     <!-- LOADING -->
     <div id="loading">
-        <lottie-player 
-            src="https://raw.githubusercontent.com/Vasiliy-katsyka/GeoGuessr/main/ChicklingEmoji_AgAD1S0AAkOY8Ug.json" 
-            background="transparent" speed="1" style="width: 150px; height: 150px; margin-bottom: 20px;" loop autoplay>
+        <lottie-player
+            src="https://raw.githubusercontent.com/Vasiliy-katsyka/GeoGuessr/main/ChicklingEmoji_AgAD1S0AAkOY8Ug.json"
+            background="transparent" speed="1" style="width: 140px; height: 140px;" loop autoplay>
         </lottie-player>
-        <h3 id="load-text" style="color: #666; font-weight:400; letter-spacing:1px;" data-i18n="lbl_loading">Loading...</h3>
+        <h3 id="load-text">Loading...</h3>
+        <button class="btn btn-soft" onclick="window.exitGame()" data-i18n="btn_cancel">Cancel</button>
     </div>
 
-    <!-- MAIN MENU -->
-    <div id="main-menu" class="full-screen-menu hidden">
-        <lottie-player 
-            src="https://raw.githubusercontent.com/Vasiliy-katsyka/GeoGuessr/main/RestrictedEmoji_AgADHFgAAt1K8Eo.json" 
-            background="transparent" speed="1" style="width: 100px; height: 100px;" loop autoplay>
-        </lottie-player>
-
-        <div class="menu-title" data-i18n="app_title">GeoGuessr</div>
-        <div class="menu-subtitle" data-i18n="app_subtitle">Ultimate World Explorer</div>
-
-        <button class="btn-main btn-blue" onclick="window.startEndless()">
-            <span class="btn-content" data-i18n="btn_endless">∞ Endless Mode</span>
-            <div class="btn-spinner"></div>
-        </button>
-        <button class="btn-main btn-dark" onclick="window.startHistoricalMode()">
-            <span class="btn-content">🕰️ Date & Location Mode</span>
-            <div class="btn-spinner"></div>
-        </button>
-        <!--<button class="btn-main btn-orange" onclick="window.startChallenge()">
-            <span class="btn-content" data-i18n="btn_challenge">⏱️ Challenge Mode</span>
-            <div class="btn-spinner"></div>
-        </button>-->
-        <button class="btn-main btn-purple" onclick="window.openCountryMenu()">
-            <span class="btn-content" data-i18n="btn_country">🌍 Country Mode</span>
-        </button>
-        <button class="btn-main btn-green" onclick="window.openFriendMenu()">
-            <span class="btn-content" data-i18n="btn_friend">👥 Party Mode</span>
-        </button>
-        <button class="btn-main btn-dark" onclick="window.openProfile()">
-            <span class="btn-content" data-i18n="btn_profile">👤 Profile</span>
-        </button>
-    </div>
-
-    <!-- COUNTRY SELECT MENU -->
-    <div id="country-menu" class="full-screen-menu hidden">
-        <h2 style="margin-bottom:20px;" data-i18n="lbl_select_country">Select Country</h2>
-        <div id="country-grid"></div>
-        <!-- Mode Select for Country -->
-        <div style="display:flex; gap:10px; width:100%; max-width:340px; margin-top:10px;">
-            <button id="cm-btn-endless" class="btn-main btn-dark" style="margin:0;" onclick="window.startCountryGame('endless')" data-i18n="mode_endless">Endless</button>
-            <button id="cm-btn-chall" class="btn-main btn-dark" style="margin:0;" onclick="window.startCountryGame('challenge')" data-i18n="mode_timed">Timed</button>
-        </div>
-        <button class="btn-main btn-red" style="margin-top:20px; width:auto;" onclick="window.showMainMenu()" data-i18n="btn_back">Back</button>
-    </div>
-
-    <!-- PROFILE SCREEN -->
-    <div id="profile-screen" class="full-screen-menu hidden scrollable">
-        <div class="big-avatar" style="font-size:50px; margin-bottom:10px;">👤</div>
-        <h2 id="pf-name">User</h2>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; width:100%; max-width:340px; margin: 20px 0;">
-            <div class="glass-panel" style="padding:15px; text-align:center;">
-                <div style="font-size:24px; font-weight:800;" id="pf-total-games">0</div>
-                <div style="font-size:12px; color:#aaa;" data-i18n="lbl_games">Rounds</div>
+    <!-- ==================== HOME ==================== -->
+    <div id="home" class="screen hidden">
+        <div class="container">
+            <div class="home-header">
+                <button class="profile-chip" onclick="window.openProfile()">
+                    <div class="avatar" id="home-avatar">G</div>
+                    <div style="min-width:0;">
+                        <div class="hello" data-i18n="lbl_hello">Welcome back</div>
+                        <div class="hello-name" id="home-name">Guest</div>
+                    </div>
+                </button>
+                <button class="chip" onclick="window.toggleLanguage()" aria-label="Language">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    <span id="lang-label">EN</span>
+                </button>
             </div>
-            <div class="glass-panel" style="padding:15px; text-align:center;">
-                <div style="font-size:24px; font-weight:800; color:#f1c40f;" id="pf-total-score">0</div>
-                <div style="font-size:12px; color:#aaa;" data-i18n="lbl_score">Total XP</div>
+
+            <div class="hero">
+                <lottie-player class="hero-lottie"
+                    src="https://raw.githubusercontent.com/Vasiliy-katsyka/GeoGuessr/main/RestrictedEmoji_AgADHFgAAt1K8Eo.json"
+                    background="transparent" speed="1" loop autoplay>
+                </lottie-player>
+                <span class="hero-tag" data-i18n="hero_tag">Classic</span>
+                <h1 data-i18n="hero_title">Where in the world?</h1>
+                <p data-i18n="hero_desc">Drop into a random street anywhere on Earth and guess where you are.</p>
+                <button class="btn btn-block" id="btn-endless" onclick="window.startEndless()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z"/></svg>
+                    <span class="btn-label" data-i18n="btn_play_world">Play now</span>
+                </button>
+            </div>
+
+            <div class="section-title" data-i18n="lbl_more_modes">More ways to play</div>
+            <div class="mode-list">
+                <button class="mode-card" onclick="window.openCountryMenu()">
+                    <div class="mode-icon" style="background: rgba(139, 92, 246, 0.16);">🗺️</div>
+                    <div class="mode-text">
+                        <div class="mode-title" data-i18n="mode_country_t">Countries</div>
+                        <div class="mode-desc" data-i18n="mode_country_d">Pick one country and master it. Endless or timed.</div>
+                    </div>
+                    <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+                <button class="mode-card" onclick="window.openFriendMenu()">
+                    <div class="mode-icon" style="background: rgba(34, 197, 94, 0.16);">👥</div>
+                    <div class="mode-text">
+                        <div class="mode-title" data-i18n="mode_party_t">Party</div>
+                        <div class="mode-desc" data-i18n="mode_party_d">Play live with up to 20 friends in one room.</div>
+                    </div>
+                    <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+            </div>
+
+            <div class="section-title" data-i18n="lbl_your_stats">Your stats</div>
+            <div class="stats">
+                <div class="stat"><div class="stat-val" id="home-games">0</div><div class="stat-lbl" data-i18n="lbl_games">Rounds</div></div>
+                <div class="stat"><div class="stat-val" id="home-avg">0</div><div class="stat-lbl" data-i18n="lbl_avg">Avg score</div></div>
+                <div class="stat"><div class="stat-val" id="home-best">0</div><div class="stat-lbl" data-i18n="lbl_best">Best</div></div>
+            </div>
+
+            <div class="section-title" data-i18n="lbl_how">How to play</div>
+            <div class="card how">
+                <div class="how-step"><span class="how-num">1</span><span data-i18n="how_1">Look around — drag to turn, tap arrows to move.</span></div>
+                <div class="how-step"><span class="how-num">2</span><span data-i18n="how_2">Tap “Guess”, then drop a pin on the map.</span></div>
+                <div class="how-step"><span class="how-num">3</span><span data-i18n="how_3">The closer you are, the more points — up to 5,000.</span></div>
             </div>
         </div>
-        <h3 style="align-self: flex-start; margin-left:20px;" data-i18n="lbl_history">History</h3>
-        <div id="history-list" style="width:100%; max-width:340px; max-height:200px; overflow-y:auto;"></div>
-        <button class="btn-main btn-dark" style="margin-top:20px;" onclick="window.closeProfile()" data-i18n="btn_back">Back</button>
-        <button class="btn-main btn-red" style="transform:scale(0.8);" onclick="window.clearData()" data-i18n="btn_reset">🗑️ Reset</button>
     </div>
 
-    <!-- FRIEND MENU -->
-    <div id="friend-menu" class="full-screen-menu hidden">
-        <h2 data-i18n="friend_mode">Party Mode</h2>
-        
-        <div class="glass-panel" style="padding:25px; width:100%; max-width:340px; margin-bottom:20px;">
-            <h4 style="margin:0 0 10px 0; opacity:0.7;" data-i18n="lbl_host">HOST</h4>
-            <button id="btn-create" class="btn-main btn-green" style="margin:0;" onclick="window.createRoom()">
-                <span class="btn-content" data-i18n="btn_create_play">Create Room</span>
-                <div class="btn-spinner"></div>
+    <!-- ==================== COUNTRY ==================== -->
+    <div id="country-screen" class="screen has-footer hidden">
+        <div class="container">
+            <div class="topbar">
+                <button class="icon-btn" onclick="window.showMainMenu()" aria-label="Back">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                <h2 data-i18n="lbl_select_country">Choose a country</h2>
+            </div>
+            <label class="search">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input type="search" id="country-search" data-i18n-ph="search_ph" placeholder="Search" autocomplete="off">
+            </label>
+            <div id="country-grid"></div>
+        </div>
+    </div>
+    <div id="country-footer" class="footer-bar hidden">
+        <div class="container">
+            <div class="segmented">
+                <button id="cm-btn-endless" class="active" onclick="window.setCountryMode('endless')">∞ <span data-i18n="mode_endless">Endless</span></button>
+                <button id="cm-btn-chall" onclick="window.setCountryMode('challenge')">⏱ <span data-i18n="mode_timed">5 rounds · 2 min</span></button>
+            </div>
+            <button id="country-play" class="btn btn-primary btn-block" onclick="window.startCountryGame()" disabled>
+                <span class="btn-label" id="country-play-label">Pick a country</span>
             </button>
         </div>
+    </div>
 
-        <div class="glass-panel" style="padding:25px; width:100%; max-width:340px; text-align:center;">
-            <h4 style="margin:0 0 10px 0; opacity:0.7;" data-i18n="lbl_join_header">JOIN</h4>
-            <!-- SCAN QR BUTTON -->
-            <button class="btn-main btn-dark" onclick="window.scanQR()" style="margin-bottom:10px;" data-i18n="btn_scan_qr">📷 Scan QR</button>
-            <div style="font-size:12px; opacity:0.5; margin:5px 0;" data-i18n="lbl_or_code">OR ENTER CODE</div>
-            <input type="text" id="join-code" class="input-code" placeholder="12345" maxlength="5">
-            <button id="btn-join" class="btn-main btn-blue" style="margin:0;" onclick="window.joinRoom()">
-                <span class="btn-content" data-i18n="btn_join">Join</span>
-                <div class="btn-spinner"></div>
+    <!-- ==================== PARTY ==================== -->
+    <div id="party-screen" class="screen hidden">
+        <div class="container">
+            <div class="topbar">
+                <button class="icon-btn" onclick="window.showMainMenu()" aria-label="Back">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                <h2 data-i18n="friend_mode">Party mode</h2>
+            </div>
+
+            <div class="card party-card">
+                <div class="party-head">
+                    <div class="mode-icon" style="background: rgba(251, 191, 36, 0.16);">👑</div>
+                    <div><h3 data-i18n="party_host_t">Host a game</h3><p data-i18n="party_host_d">Create a room and invite your friends.</p></div>
+                </div>
+                <button id="btn-create" class="btn btn-green btn-block" onclick="window.createRoom()">
+                    <span class="btn-label" data-i18n="btn_create_play">Create room</span>
+                    <div class="spinner"></div>
+                </button>
+            </div>
+
+            <div class="card party-card" style="margin-top:12px;">
+                <div class="party-head">
+                    <div class="mode-icon" style="background: rgba(59, 130, 246, 0.16);">🎟️</div>
+                    <div><h3 data-i18n="lbl_join_header">Join a game</h3><p data-i18n="party_join_d">Enter the 5-digit code from your friend.</p></div>
+                </div>
+                <input type="text" id="join-code" class="code-input" placeholder="•••••" maxlength="5" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+                <button id="btn-join" class="btn btn-primary btn-block" onclick="window.joinRoom()" disabled>
+                    <span class="btn-label" data-i18n="btn_join">Join</span>
+                    <div class="spinner"></div>
+                </button>
+                <div class="divider" data-i18n="lbl_or">or</div>
+                <button class="btn btn-soft btn-block" onclick="window.scanQR()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>
+                    <span class="btn-label" data-i18n="btn_scan_qr">Scan QR code</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== LOBBY ==================== -->
+    <div id="lobby-screen" class="screen hidden">
+        <div class="container">
+            <div class="topbar">
+                <button class="icon-btn" onclick="window.leaveLobby()" aria-label="Leave">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                <h2 data-i18n="lobby_title">Lobby</h2>
+            </div>
+
+            <div class="card lobby-code-card">
+                <div class="lobby-label" data-i18n="lbl_room_code">Room code</div>
+                <div id="lobby-code-display">-----</div>
+                <div id="lobby-qr-container"></div>
+                <p class="lobby-hint" data-i18n="lbl_share_instr">Friends can scan the QR or enter the code</p>
+                <div class="row">
+                    <button class="btn btn-soft" onclick="window.copyCode()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        <span class="btn-label" data-i18n="btn_copy">Copy</span>
+                    </button>
+                    <button class="btn btn-soft" onclick="window.inviteFriends()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                        <span class="btn-label" data-i18n="btn_invite">Invite</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="section-title"><span data-i18n="lbl_players">Players</span> · <span id="player-count">0</span>/20</div>
+            <div id="player-list"></div>
+
+            <div style="margin-top:20px;">
+                <button id="host-actions" class="btn btn-green btn-block hidden" onclick="window.hostStartGame()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z"/></svg>
+                    <span class="btn-label" data-i18n="btn_start_game">Start game</span>
+                </button>
+                <div id="lobby-status" class="waiting-note hidden"><span class="pulse"></span><span data-i18n="lbl_waiting_host">Waiting for the host to start…</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== PROFILE ==================== -->
+    <div id="profile-screen" class="screen hidden">
+        <div class="container">
+            <div class="topbar">
+                <button class="icon-btn" onclick="window.closeProfile()" aria-label="Back">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                <h2 data-i18n="lbl_profile">Profile</h2>
+            </div>
+
+            <div class="profile-top">
+                <div class="avatar lg" id="pf-avatar">G</div>
+                <h3 id="pf-name">User</h3>
+            </div>
+
+            <div class="card level-card">
+                <div class="level-row"><b id="pf-level">Level 1</b><span id="pf-level-next">0 / 10,000 XP</span></div>
+                <div class="bar"><div id="pf-level-bar"></div></div>
+            </div>
+
+            <div class="stats" style="margin-top:12px;">
+                <div class="stat"><div class="stat-val" id="pf-total-games">0</div><div class="stat-lbl" data-i18n="lbl_games">Rounds</div></div>
+                <div class="stat"><div class="stat-val" id="pf-total-score" style="color:var(--gold);">0</div><div class="stat-lbl" data-i18n="lbl_score">Total XP</div></div>
+                <div class="stat"><div class="stat-val" id="pf-best">0</div><div class="stat-lbl" data-i18n="lbl_best">Best</div></div>
+            </div>
+
+            <div class="section-title" data-i18n="lbl_history">Recent rounds</div>
+            <div class="card" style="padding: 4px 14px;">
+                <div id="history-list"></div>
+            </div>
+
+            <button class="btn btn-danger-soft btn-block" style="margin-top:24px;" onclick="window.clearData()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                <span class="btn-label" data-i18n="btn_reset">Reset progress</span>
             </button>
         </div>
-        <button class="btn-main btn-dark" style="margin-top:20px; width:auto;" onclick="window.showMainMenu()" data-i18n="btn_back">Back</button>
     </div>
 
-    <!-- LOBBY -->
-    <div id="lobby-screen" class="full-screen-menu hidden">
-        <h1 id="lobby-code-display" style="font-size:4rem; margin:0; letter-spacing:5px;">----</h1>
-        
-        <!-- QR Container -->
-        <div id="lobby-qr-container"></div>
-        <p style="color:#aaa; font-size:0.9rem;" data-i18n="lbl_share_instr">Scan or share code to join</p>
-        
-        <div id="player-list"></div>
-
-        <div id="host-actions" class="hidden" style="width:100%; max-width:320px;">
-            <button class="btn-main btn-green" onclick="window.hostStartGame()" data-i18n="btn_start_game">Start Game</button>
-        </div>
-        
-        <div id="lobby-status" style="margin-top:10px; color:#aaa; font-style:italic;" data-i18n="lbl_waiting_max">Waiting for players (Max 20)...</div>
-        <button class="btn-main btn-red" style="width:auto; margin-top:20px;" onclick="window.leaveLobby()" data-i18n="btn_leave">Leave</button>
-    </div>
-
-    <!-- GAME HUD -->
-    <div id="mly" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:1;"></div>
-    <div id="panorama" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:2; display:none;"></div>
-    
-    <div id="top-hud">
-        <div style="display:flex; flex-direction:column;">
-            <div id="timer-box" class="hidden">02:00</div>
-            <div id="host-controls" class="hidden">
-                <button style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px;" onclick="window.hostForceRoundEnd()" data-i18n="btn_end_round">End Round</button>
+    <!-- ==================== GAME HUD ==================== -->
+    <div id="hud">
+        <div class="hud-row">
+            <button id="exit-btn" class="icon-btn glass" onclick="window.exitGame()" aria-label="Exit">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+            <div class="hud-center">
+                <div class="hud-pill glass">
+                    <span id="mode-label">🌍 World</span>
+                    <span id="round-indicator">Round 1</span>
+                </div>
+                <div id="timer-box" class="hud-pill glass hidden">2:00</div>
             </div>
+            <button id="score-box" class="glass" onclick="window.toggleScoreboard()">
+                <span class="hud-score-lbl" data-i18n="lbl_me">Score</span>
+                <span id="score-me">0</span>
+            </button>
         </div>
-        <div id="score-box">
-            <div id="round-indicator" style="font-size:10px; opacity:0.7;">ROUND 1/5</div>
-            <div style="font-size:18px; font-weight:bold;"><span data-i18n="lbl_me">YOU</span> <span id="score-me" style="color:#f1c40f;">0</span></div>
-            <div id="mp-scores" style="display:none; font-size:11px; margin-top:5px; border-top:1px solid rgba(255,255,255,0.1); padding-top:4px;"></div>
+        <div id="mp-scores" class="glass collapsed hidden"></div>
+        <div id="host-controls" class="hidden">
+            <button class="chip chip-danger" onclick="window.hostForceRoundEnd()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+                <span data-i18n="btn_end_round">End round</span>
+            </button>
         </div>
     </div>
 
-    <button id="mobile-map-toggle" onclick="window.toggleMap()">🗺️</button>
+    <button id="guess-fab" class="btn btn-primary" onclick="window.openMap()">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <span class="btn-label" data-i18n="btn_guess">Guess</span>
+    </button>
 
-    <div id="map-container">
-        <div id="date-guess-container" class="hidden" style="padding: 15px; background: rgba(0,0,0,0.6); backdrop-filter: blur(15px); border-radius: 20px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 10px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-            <div style="display: flex; justify-content: space-between; color: white; font-weight: 800; font-size: 1.1rem;">
-                <span style="opacity: 0.8;">Guess the Year:</span>
-                <span id="year-display-value" style="color: #00C6FF;">1000</span>
-            </div>
-            <input type="range" id="guess-year" min="-1000" max="2026" value="1000" step="1">
+    <div id="map-sheet">
+        <div class="sheet-grabber"></div>
+        <div class="sheet-head">
+            <div class="sheet-title" data-i18n="lbl_your_guess">Where are you?</div>
+            <button class="icon-btn" onclick="window.toggleMapSize()" aria-label="Resize map">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+            </button>
+            <button class="icon-btn" onclick="window.closeMap()" aria-label="Close map">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
         </div>
         <div id="map"></div>
-        <button id="confirm-btn" onclick="window.submitGuess()" data-i18n="btn_guess_tap">Tap map to guess</button>
+        <button id="confirm-btn" class="btn btn-primary btn-block" onclick="window.submitGuess()" disabled>Tap the map to drop a pin</button>
     </div>
 
+    <!-- ==================== RESULT SHEET ==================== -->
     <div id="result-sheet">
-        <div style="display:flex; justify-content:space-between; align-items:flex-end;">
-            <div>
-                <div style="font-size:2.8rem; font-weight:900; line-height:1;" id="res-dist">0 m</div>
-                <div style="color:#f1c40f; font-weight:bold; font-size:1.5rem;" id="res-pts">+0 pts</div>
+        <div class="container">
+            <div class="sheet-grabber"></div>
+            <div class="res-top">
+                <div>
+                    <div id="res-pts">0</div>
+                    <div class="res-pts-lbl" data-i18n="lbl_points">points</div>
+                </div>
+                <div>
+                    <div id="res-dist">0 km</div>
+                    <div id="res-dist-lbl" data-i18n="lbl_away">from the spot</div>
+                </div>
             </div>
-            <div style="text-align:right;">
-                <div style="opacity:0.6; font-size:0.9rem;" data-i18n="lbl_location">Location</div>
-                <div id="res-loc-name" style="font-weight:600;">City, Country</div>
+            <div class="bar gold"><div id="res-bar"></div></div>
+            <div class="res-loc">
+                <span class="res-loc-flag" id="res-loc-flag">🌍</span>
+                <div style="min-width:0;">
+                    <div class="res-loc-lbl" data-i18n="lbl_location">It was in</div>
+                    <div id="res-loc-name">City, Country</div>
+                </div>
             </div>
-        </div>
-        
-        <div id="res-mp-list" style="background:rgba(255,255,255,0.05); padding:10px; border-radius:12px; display:none; max-height:120px; overflow-y:auto;"></div>
-
-        <div style="display:flex; gap:10px; margin-top:10px;">
-            <button class="btn-main btn-dark" style="width:60px; margin:0; padding:0;" onclick="window.shareResult()" data-i18n="btn_share">📤</button>
-            <button class="btn-main btn-blue" id="next-btn" style="margin:0;" onclick="window.nextRound()">
-                <span class="btn-content" data-i18n="btn_next">Play Next</span>
-                <div class="btn-spinner"></div>
-            </button>
+            <div id="res-mp-list" class="card hidden" style="padding:12px 14px;"></div>
+            <div class="res-actions">
+                <button class="btn btn-soft" onclick="window.shareResult()" aria-label="Share">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>
+                </button>
+                <button class="btn btn-primary" id="next-btn" onclick="window.nextRound()">
+                    <span class="btn-label">Next round</span>
+                    <div class="spinner"></div>
+                </button>
+            </div>
         </div>
     </div>
 
-    <!-- SUMMARY MODAL -->
-    <div id="summary-modal" style="position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:7000; display:none; flex-direction:column; align-items:center; justify-content:center;">
-        <h1 style="text-transform:uppercase; letter-spacing:2px;" data-i18n="lbl_game_over">Game Over</h1>
-        <div id="final-score" style="font-size:5rem; font-weight:900; background:var(--primary-grad); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">0</div>
-        <button class="btn-main btn-blue" onclick="window.location.reload()" data-i18n="btn_menu">Menu</button>
+    <!-- ==================== SUMMARY ==================== -->
+    <div id="summary-modal" class="hidden">
+        <div class="container">
+            <div class="summary-head">
+                <div class="summary-emoji" id="summary-emoji">🏆</div>
+                <h1 id="summary-title">Game over</h1>
+                <div id="final-score">0</div>
+                <div class="summary-sub" id="summary-sub">points</div>
+            </div>
+            <div id="summary-rounds"></div>
+            <div class="summary-actions">
+                <button class="btn btn-primary btn-block" id="btn-play-again" onclick="window.playAgain()">
+                    <span class="btn-label" data-i18n="btn_play_again">Play again</span>
+                </button>
+                <button class="btn btn-soft btn-block" onclick="window.shareResult()">
+                    <span class="btn-label" data-i18n="btn_share">Share score</span>
+                </button>
+                <button class="btn btn-ghost btn-block" onclick="window.showMainMenu()">
+                    <span class="btn-label" data-i18n="btn_menu">Main menu</span>
+                </button>
+            </div>
+        </div>
     </div>
+
+    <div id="toast"></div>
 
     <!-- SCRIPTS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -524,125 +784,237 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         const MLY_TOKEN = 'MLY|26213154491618951|523c0418de2d6a8118aefdab3284d6c2';
+        const BOT_APP_LINK = "https://t.me/geogur_bot/app";
+        const MAX_PTS = 5000;
 
         const TR = {
             en: {
-                app_title: "GeoGuessr", 
-                app_subtitle: "Ultimate World Explorer",
                 lbl_loading: "Loading...",
-                lbl_select_country: "Select Country",
-                lbl_host: "HOST",
-                lbl_join_header: "JOIN",
-                lbl_or_code: "OR ENTER CODE",
-                lbl_share_instr: "Scan or share code to join",
-                lbl_waiting_max: "Waiting for players (Max 20)...",
-                lbl_waiting: "Waiting for players...",
-                lbl_me: "YOU",
+                lbl_finding: "Finding a place...",
+                lbl_hello: "Welcome back",
+                hero_tag: "Classic",
+                hero_title: "Where in the world?",
+                hero_desc: "Drop into a random street anywhere on Earth and guess where you are.",
+                btn_play_world: "Play now",
+                lbl_more_modes: "More ways to play",
+                mode_country_t: "Countries",
+                mode_country_d: "Pick one country and master it. Endless or timed.",
+                mode_party_t: "Party",
+                mode_party_d: "Play live with up to 20 friends in one room.",
+                lbl_your_stats: "Your stats",
                 lbl_games: "Rounds",
+                lbl_avg: "Avg score",
+                lbl_best: "Best",
                 lbl_score: "Total XP",
-                lbl_history: "History",
-                lbl_location: "Location",
-                lbl_game_over: "Game Over",
-                lbl_missed: "Missed",
+                lbl_how: "How to play",
+                how_1: "Look around — drag to turn, tap arrows to move.",
+                how_2: "Tap “Guess”, then drop a pin on the map.",
+                how_3: "The closer you are, the more points — up to 5,000.",
 
-                btn_endless: "∞ Endless Mode",
-                btn_challenge: "⏱️ Challenge Mode",
-                btn_country: "🌍 Country Mode",
-                btn_friend: "👥 Party Mode",
-                btn_profile: "👤 Profile",
-                btn_back: "Back",
+                lbl_select_country: "Choose a country",
+                search_ph: "Search country",
+                lbl_no_country: "Nothing found",
                 mode_endless: "Endless",
-                mode_timed: "Timed",
-                btn_create_play: "Create Room",
-                btn_scan_qr: "📷 Scan QR",
+                mode_timed: "5 rounds · 2 min",
+                btn_pick_country: "Pick a country",
+                btn_play_in: "Play {c}",
+
+                friend_mode: "Party mode",
+                party_host_t: "Host a game",
+                party_host_d: "Create a room and invite your friends.",
+                btn_create_play: "Create room",
+                lbl_join_header: "Join a game",
+                party_join_d: "Enter the 5-digit code from your friend.",
                 btn_join: "Join",
-                btn_start_game: "Start Game",
-                btn_leave: "Leave",
-                btn_end_round: "End Round",
-                btn_guess_tap: "Tap map to guess",
-                btn_confirm: "CONFIRM GUESS",
-                btn_waiting: "WAITING...",
-                btn_next: "Play Next",
-                btn_finish: "Finish",
-                btn_menu: "Main Menu",
-                btn_reset: "🗑️ Reset",
-                btn_share: "📤",
+                lbl_or: "or",
+                btn_scan_qr: "Scan QR code",
 
-                msg_kicked: "You were kicked.",
-                msg_room_full: "Room is full (Max 20)",
-                msg_room_not_found: "Room not found",
-                msg_room_closed: "Room closed",
-                msg_qr_popup: "Scan Lobby QR",
-                msg_qr_invalid: "Invalid QR Code",
-                msg_qr_mobile_only: "QR Scanner only works in Telegram Mobile.",
-                msg_clear_confirm: "Clear history?",
-                msg_share_text: "Scored {s} pts in GeoGuessr!"
+                lobby_title: "Lobby",
+                lbl_room_code: "Room code",
+                lbl_share_instr: "Friends can scan the QR or enter the code",
+                btn_copy: "Copy",
+                btn_invite: "Invite",
+                lbl_players: "Players",
+                lbl_host_badge: "Host",
+                lbl_you: "You",
+                btn_start_game: "Start game",
+                lbl_waiting_host: "Waiting for the host to start…",
+
+                lbl_world: "World",
+                lbl_party: "Party",
+                lbl_round: "Round {r}",
+                lbl_round_of: "Round {r} of {m}",
+                lbl_me: "Score",
+                btn_end_round: "End round",
+                btn_guess: "Guess",
+                lbl_your_guess: "Where are you?",
+                btn_guess_tap: "Tap the map to drop a pin",
+                btn_confirm: "Confirm guess",
+                btn_waiting: "Waiting for others…",
+                btn_cancel: "Cancel",
+
+                lbl_points: "points",
+                lbl_away: "from the spot",
+                lbl_missed: "No guess",
+                lbl_location: "It was in",
+                btn_next: "Next round",
+                btn_finish: "See results",
+                btn_waiting_host: "Waiting for host…",
+
+                lbl_game_over: "Game over",
+                lbl_session_over: "Nice session!",
+                lbl_rounds_played: "points · rounds played: {n}",
+                btn_play_again: "Play again",
+                btn_share: "Share score",
+                btn_menu: "Main menu",
+
+                lbl_profile: "Profile",
+                lbl_level: "Level {l}",
+                lbl_history: "Recent rounds",
+                lbl_no_history: "No rounds yet — go explore! 🌍",
+                btn_reset: "Reset progress",
+
+                msg_kicked: "You were removed from the room.",
+                msg_room_full: "Room is full (max 20 players)",
+                msg_room_not_found: "Room not found. Check the code.",
+                msg_room_closed: "The host closed the room.",
+                msg_qr_popup: "Scan the lobby QR code",
+                msg_qr_invalid: "That QR code isn't a GeoGuessr room.",
+                msg_qr_mobile_only: "QR scanning works in the Telegram mobile app.",
+                msg_clear_confirm: "Reset all your stats and history?",
+                msg_exit_confirm: "Leave this game? Your progress in this run will be lost.",
+                msg_leave_room: "Leave the room?",
+                msg_copied: "Code copied",
+                msg_net_error: "Connection problem. Please try again.",
+                msg_share_text: "I scored {s} points in GeoGuessr! Can you beat me? 🌍",
+                msg_invite_text: "Join my GeoGuessr room! Code: {c} 🌍"
             },
-            ru: { 
-                app_title: "ГеоГессср", 
-                app_subtitle: "Дослiджуй свiт", 
-                btn_country: "🌍 По странам", 
-                btn_endless: "∞ Бесконечность", 
-                btn_challenge: "⏱️ На время", 
-                btn_friend: "👥 Группость", 
-                btn_profile: "👤 Профiль", 
-                btn_back: "Назад", 
-                friend_mode: "Игра с друнами", 
-                btn_create_play: "Создать", 
-                btn_join: "Войтi", 
-                lbl_waiting: "Ждемс игроков...", 
-                btn_leave: "Выйтi", 
-                btn_start_game: "Начать", 
-                btn_guess_tap: "Нажми на картость", 
-                btn_next: "Дальше", 
-                lbl_game_over: "Конецость игры", 
-                btn_menu: "В меню", 
-                lbl_location: "Локацiя", 
-                msg_kicked: "Вы iсключены.",
-                lbl_me: "ВЫ",
-                lbl_games: "Раунды",
-                lbl_score: "Всего XP",
-                lbl_history: "Исторiя",
-
+            ru: {
                 lbl_loading: "Загрузка...",
+                lbl_finding: "Ищем место...",
+                lbl_hello: "С возвращением",
+                hero_tag: "Классика",
+                hero_title: "Где ты на карте?",
+                hero_desc: "Окажись на случайной улице где угодно на Земле и угадай, где ты.",
+                btn_play_world: "Играть",
+                lbl_more_modes: "Другие режимы",
+                mode_country_t: "По странам",
+                mode_country_d: "Выбери страну и изучи её. Бесконечно или на время.",
+                mode_party_t: "Группость",
+                mode_party_d: "Играй с друзьями онлайн — до 20 человек.",
+                lbl_your_stats: "Твоя статистика",
+                lbl_games: "Раунды",
+                lbl_avg: "Средний",
+                lbl_best: "Лучший",
+                lbl_score: "Всего XP",
+                lbl_how: "Как играть",
+                how_1: "Осмотрись — свайпай, чтобы повернуться, жми стрелки, чтобы идти.",
+                how_2: "Нажми «Угадать» и поставь метку на карте.",
+                how_3: "Чем ближе — тем больше очков, максимум 5 000.",
+
                 lbl_select_country: "Выберите страну",
-                lbl_host: "ХОСТ",
-                lbl_join_header: "ВОЙТИ",
-                lbl_or_code: "ИЛИ ВВЕДИ КОД",
-                lbl_share_instr: "Сканируй или делись кодом",
-                lbl_waiting_max: "Ждем игроков (Макс 20)...",
+                search_ph: "Поиск страны",
+                lbl_no_country: "Ничего не найдено",
+                mode_endless: "Бесконечно",
+                mode_timed: "5 раундов · 2 мин",
+                btn_pick_country: "Выберите страну",
+                btn_play_in: "Играть: {c}",
+
+                friend_mode: "Игра с друнами",
+                party_host_t: "Создать игру",
+                party_host_d: "Создай комнату и позови друзей.",
+                btn_create_play: "Создать комнату",
+                lbl_join_header: "Присоединиться",
+                party_join_d: "Введи 5-значный код от друга.",
+                btn_join: "Войтi",
+                lbl_or: "или",
+                btn_scan_qr: "Сканировать QR",
+
+                lobby_title: "Лобби",
+                lbl_room_code: "Код комнаты",
+                lbl_share_instr: "Друзья могут отсканировать QR или ввести код",
+                btn_copy: "Копировать",
+                btn_invite: "Позвать",
+                lbl_players: "Игроки",
+                lbl_host_badge: "Хост",
+                lbl_you: "Вы",
+                btn_start_game: "Начать игру",
+                lbl_waiting_host: "Ждемс, пока хост начнёт…",
+
+                lbl_world: "Мир",
+                lbl_party: "Группость",
+                lbl_round: "Раунд {r}",
+                lbl_round_of: "Раунд {r} из {m}",
+                lbl_me: "Очки",
+                btn_end_round: "Завершить раунд",
+                btn_guess: "Угадать",
+                lbl_your_guess: "Где ты?",
+                btn_guess_tap: "Нажми на картость, чтобы поставить метку",
+                btn_confirm: "Подтвердить",
+                btn_waiting: "Ждём остальных…",
+                btn_cancel: "Отмена",
+
+                lbl_points: "очков",
+                lbl_away: "от точки",
                 lbl_missed: "Мимо",
-                mode_endless: "Бесконечность",
-                mode_timed: "На время",
-                btn_scan_qr: "📷 Сканировать QR",
-                btn_end_round: "Завершить",
-                btn_confirm: "ПОДТВЕРДИТЬ",
-                btn_waiting: "ОЖИДАНИЕ...",
-                btn_finish: "Финиш",
-                btn_reset: "🗑️ Сброс",
-                btn_share: "📤",
-                msg_room_full: "Комната жырная (Макс 20)",
-                msg_room_not_found: "Комната не найдена",
-                msg_room_closed: "Комната закрыта",
+                lbl_location: "Это было в",
+                btn_next: "Дальше",
+                btn_finish: "Итоги",
+                btn_waiting_host: "Ждём хоста…",
+
+                lbl_game_over: "Конецость игры",
+                lbl_session_over: "Отличная игра!",
+                lbl_rounds_played: "очков · раундов: {n}",
+                btn_play_again: "Ещё раз",
+                btn_share: "Поделиться",
+                btn_menu: "В меню",
+
+                lbl_profile: "Профiль",
+                lbl_level: "Уровень {l}",
+                lbl_history: "Последние раунды",
+                lbl_no_history: "Пока пусто — вперёд исследовать! 🌍",
+                btn_reset: "Сбросить прогресс",
+
+                msg_kicked: "Вы iсключены.",
+                msg_room_full: "Комната жырная (макс. 20)",
+                msg_room_not_found: "Комната не найдена. Проверь код.",
+                msg_room_closed: "Хост закрыл комнату.",
                 msg_qr_popup: "Сканируй QR лобби",
-                msg_qr_invalid: "Неверный QR код",
+                msg_qr_invalid: "Это не QR комнаты GeoGuessr.",
                 msg_qr_mobile_only: "Сканер работает только в мобильном Telegram.",
-                msg_clear_confirm: "Очистить историю?",
-                msg_share_text: "Я набрал {s} жырчков в ГеоГессср!"
+                msg_clear_confirm: "Сбросить всю статистику и историю?",
+                msg_exit_confirm: "Выйти из игры? Прогресс этой партии пропадёт.",
+                msg_leave_room: "Покинуть комнату?",
+                msg_copied: "Код скопирован",
+                msg_net_error: "Проблема с сетью. Попробуй ещё раз.",
+                msg_share_text: "Я набрал {s} жырчков в ГеоГессср! Сможешь лучше? 🌍",
+                msg_invite_text: "Заходи в мою комнату ГеоГессср! Код: {c} 🌍"
             }
         };
 
-        const USER = (window.Telegram?.WebApp?.initDataUnsafe?.user) || { id: 'test_'+Math.floor(Math.random()*1000), first_name: 'Guest', language_code: 'en' };
-        const WORKER_URL = "https://geo-bot.kviappsgames.workers.dev";
+        const COUNTRY_RU = {
+            ru: "Россия", ee: "Эстония", us: "США", fr: "Франция", jp: "Япония", br: "Бразилия", tr: "Турция", it: "Италия",
+            de: "Германия", gb: "Великобритания", es: "Испания", ca: "Канада", au: "Австралия", mx: "Мексика", ar: "Аргентина",
+            kr: "Южная Корея", nl: "Нидерланды", ch: "Швейцария", se: "Швеция", no: "Норвегия", pl: "Польша", gr: "Греция",
+            pt: "Португалия", in: "Индия", th: "Таиланд", ae: "ОАЭ", nz: "Новая Зеландия", co: "Колумбия", za: "ЮАР", at: "Австрия"
+        };
+
+        const TG = window.Telegram?.WebApp;
+        const tgv = (v) => !!(TG && TG.isVersionAtLeast && TG.isVersionAtLeast(v));
+        const USER = TG?.initDataUnsafe?.user || { id: 'test_' + Math.floor(Math.random() * 1000), first_name: 'Guest', language_code: 'en' };
+
         const STATE = {
             lang: localStorage.getItem('geo_lang') || (USER.language_code === 'ru' ? 'ru' : 'en'),
-            mode: 'menu', mpRole: null, gameId: null, myUid: USER.id.toString(), myName: USER.first_name,
+            screen: 'loading',
+            mode: 'menu', mpRole: null, gameId: null, myUid: USER.id.toString(), myName: USER.first_name || 'Player',
             round: 1, maxRounds: 5, score: 0, timer: null, timeLeft: 120, currentLoc: null, isLocked: false,
-            mpModeSelected: 'endless', selectedCountry: null,
+            selectedCountry: null, countryMode: 'endless',
+            roundResults: [],
+            session: 0,            // bumped whenever a game starts/ends so stale async callbacks are ignored
+            lobbyUnsub: null, gameUnsub: null,
             history: JSON.parse(localStorage.getItem('geo_history') || '[]'),
             totalGames: parseInt(localStorage.getItem('geo_total_games') || '0'),
-            totalScore: parseInt(localStorage.getItem('geo_total_score') || '0'),
-            historicalData: null
+            totalScore: parseInt(localStorage.getItem('geo_total_score') || '0')
         };
 
         const LOCATIONS = [
@@ -969,361 +1341,395 @@
         };
 
         let map, mly, guessMarker, resultLine, resultMarker, oppMarkers = [];
-        
-        // --- BACKGROUND PRELOADING ---
-        const PRELOADED_LOCATIONS =[];
-        const TARGET_PRELOAD_COUNT = 20; 
+
+        // ==================== HELPERS ====================
+        const $ = (id) => document.getElementById(id);
+        const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const fmt = (n) => Math.round(n).toLocaleString(STATE.lang === 'ru' ? 'ru-RU' : 'en-US');
+        function t(key) { return TR[STATE.lang][key] || TR.en[key] || key; }
+        function countryName(code) { return (STATE.lang === 'ru' && COUNTRY_RU[code]) || COUNTRY_POOLS[code].name; }
+        function initials(name) { return (String(name || '?').trim()[0] || '?').toUpperCase(); }
+
+        function haptic(type) {
+            try {
+                const h = TG?.HapticFeedback;
+                if (!h || !tgv('6.1')) return;
+                if (type === 'select') h.selectionChanged();
+                else if (['success', 'error', 'warning'].includes(type)) h.notificationOccurred(type);
+                else h.impactOccurred(type || 'light');
+            } catch (e) { }
+        }
+        function tgAlert(msg) {
+            if (tgv('6.2')) TG.showAlert(msg); else alert(msg);
+        }
+        function tgConfirm(msg) {
+            return new Promise(res => {
+                if (tgv('6.2')) TG.showConfirm(msg, ok => res(!!ok)); else res(confirm(msg));
+            });
+        }
+        let toastTimer;
+        function toast(msg) {
+            const el = $('toast');
+            el.textContent = msg;
+            el.classList.add('show');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+        }
+        function animateNumber(el, to, dur = 900) {
+            const start = performance.now();
+            const step = (now) => {
+                const p = Math.min(1, (now - start) / dur);
+                el.textContent = fmt(to * (1 - Math.pow(1 - p, 3)));
+                if (p < 1) requestAnimationFrame(step);
+            };
+            requestAnimationFrame(step);
+        }
+        function formatDist(m) { return m < 1000 ? Math.round(m) + " m" : m < 10000 ? (m / 1000).toFixed(1) + " km" : fmt(m / 1000) + " km"; }
+        function scoreFor(dist) { return Math.round(MAX_PTS * Math.exp(-dist / 120000)); }
+        function showLoading(text) { $('load-text').textContent = text || t('lbl_loading'); $('loading').classList.remove('hidden'); }
+        function hideLoading() { $('loading').classList.add('hidden'); }
+        function setAvatar(el) {
+            if (USER.photo_url) el.innerHTML = `<img src="${esc(USER.photo_url)}" alt="">`;
+            else el.textContent = initials(STATE.myName);
+        }
+        function pinIcon(color) {
+            return L.divIcon({
+                className: 'pin-icon',
+                html: `<svg width="34" height="44" viewBox="-2 -2 38 48"><path d="M17 0C7.6 0 0 7.4 0 16.6 0 29 17 44 17 44s17-15 17-27.4C34 7.4 26.4 0 17 0z" fill="${color}" stroke="#fff" stroke-width="2.5"/><circle cx="17" cy="16.5" r="6" fill="#fff"/></svg>`,
+                iconSize: [34, 44], iconAnchor: [17, 43]
+            });
+        }
+
+        // ==================== BACKGROUND PRELOADING ====================
+        const PRELOADED_LOCATIONS = [];
+        const TARGET_PRELOAD_COUNT = 20;
         let currentPreloadCountry = null;
 
         // Try to fetch a valid location. Returns NULL if not found immediately (no retries here).
-        // BBOX is increased to 0.05 (~5.5km) to ensure very high hit rate.
+        // BBOX is ~0.05 (~5.5km) to ensure a very high hit rate.
         async function fetchValidLocation(countryCode) {
             let pool = LOCATIONS;
-            if (countryCode && COUNTRY_POOLS[countryCode]) {
-                pool = COUNTRY_POOLS[countryCode].cities;
-            }
+            if (countryCode && COUNTRY_POOLS[countryCode]) pool = COUNTRY_POOLS[countryCode].cities;
 
             const city = pool[Math.floor(Math.random() * pool.length)];
             const rLat = city.lat + (Math.random() * 0.08 - 0.04);
             const rLng = city.lng + (Math.random() * 0.08 - 0.04);
-            
-            // Massive box ~5km
-            const bbox = `${rLng-0.05},${rLat-0.05},${rLng+0.05},${rLat+0.05}`;
-            
+            const bbox = `${rLng - 0.05},${rLat - 0.05},${rLng + 0.05},${rLat + 0.05}`;
+
             try {
                 const res = await fetch(`https://graph.mapillary.com/images?access_token=${MLY_TOKEN}&fields=id,geometry&is_pano=true&bbox=${bbox}&limit=1`);
                 const data = await res.json();
-                
                 if (data.data && data.data.length > 0) {
                     const cityName = countryCode ? COUNTRY_POOLS[countryCode].name : city.name;
                     const cityFlag = countryCode ? COUNTRY_POOLS[countryCode].flag : (city.flag || "");
-                    
-                    return { 
-                        id: data.data[0].id, 
-                        lat: data.data[0].geometry.coordinates[1], 
-                        lng: data.data[0].geometry.coordinates[0], 
-                        city: { name: cityName, flag: cityFlag } 
+                    return {
+                        id: data.data[0].id,
+                        lat: data.data[0].geometry.coordinates[1],
+                        lng: data.data[0].geometry.coordinates[0],
+                        city: { name: cityName, flag: cityFlag }
                     };
                 }
-            } catch(e) { }
+            } catch (e) { }
             return null;
         }
 
-        // Single Worker
-        async function runWorker(workerId) {
+        async function runWorker() {
             while (true) {
                 if (PRELOADED_LOCATIONS.length < TARGET_PRELOAD_COUNT) {
-                    const loc = await fetchValidLocation(currentPreloadCountry);
-                    if (loc) {
-                        PRELOADED_LOCATIONS.push(loc);
-                        // console.log(`[Worker ${workerId}] Cached. Total: ${PRELOADED_LOCATIONS.length}`);
-                    }
-                    await new Promise(r => setTimeout(r, 100)); // Brief pause
+                    const target = currentPreloadCountry;
+                    const loc = await fetchValidLocation(target);
+                    // Drop results that belong to a pool the user already switched away from
+                    if (loc && target === currentPreloadCountry) PRELOADED_LOCATIONS.push(loc);
+                    await new Promise(r => setTimeout(r, 100));
                 } else {
-                    await new Promise(r => setTimeout(r, 1000)); // Sleep if full
+                    await new Promise(r => setTimeout(r, 1000));
                 }
             }
         }
 
-        // --- HISTORICAL MODE BACKGROUND PRELOADER ---
-        let preloadedHistoricalPromise = null;
-
-        function preloadHistorical() {
-            preloadedHistoricalPromise = fetch(`${WORKER_URL}/api/historical`)
-                .then(async res => {
-                    if (!res.ok) throw new Error("Server error");
-                    const eventHeader = res.headers.get("X-Event-Data");
-                    const eventData = JSON.parse(decodeURIComponent(eventHeader));
-                    const imageBlob = await res.blob();
-                    const imageUrl = URL.createObjectURL(imageBlob);
-                    return { eventData, imageUrl };
-                })
-                .catch(err => null); // Fail silently in background, will retry on next round
-        }
-
-        // 1. Triggered when clicking "Historical Mode" in Main Menu
-        window.startHistoricalMode = () => {
-            document.body.classList.add('game-active');
-            STATE.mode = 'historical'; 
-            STATE.score = 0; // Reset score for new game
-            updateHUD();
-            startHistoricalRound();
-        };
-
-        // 2. Triggered for every new round
-        async function startHistoricalRound() {
-            document.getElementById('loading').classList.remove('hidden');
-            resetMapUI();
-
-            try {
-                let data = null;
-                // Use preloaded background data if it's ready! (Makes loading instant)
-                if (preloadedHistoricalPromise) {
-                    data = await preloadedHistoricalPromise;
-                    preloadedHistoricalPromise = null; 
-                }
-                
-                // If no preload is ready (e.g., Round 1), fetch it now
-                if (!data) {
-                    const res = await fetch(`${WORKER_URL}/api/historical`);
-                    if (!res.ok) {
-                        const errObj = await res.json().catch(()=>({}));
-                        throw new Error(errObj.error || "Server error");
-                    }
-                    const eventHeader = res.headers.get("X-Event-Data");
-                    const eventData = JSON.parse(decodeURIComponent(eventHeader));
-                    const imageBlob = await res.blob();
-                    const imageUrl = URL.createObjectURL(imageBlob);
-                    data = { eventData, imageUrl };
-                }
-
-                // Immediately start generating the NEXT round in the background while user plays!
-                preloadHistorical();
-
-                STATE.historicalData = data.eventData;
-
-                // Hide Mapillary, Show Pannellum
-                document.getElementById('mly').style.display = 'none';
-                const panoDiv = document.getElementById('panorama');
-                panoDiv.style.display = 'block';
-                panoDiv.innerHTML = ''; // Clear old viewer
-
-                // Render 360 Image using the Blob URL
-                pannellum.viewer('panorama', {
-                    "type": "equirectangular",
-                    "panorama": data.imageUrl, 
-                    "autoLoad": true,
-                    "showControls": false
-                });
-
-                // Setup UI
-                document.getElementById('date-guess-container').classList.remove('hidden');
-                
-                const yearSlider = document.getElementById('guess-year');
-                const yearDisplay = document.getElementById('year-display-value');
-                
-                yearSlider.value = 1000; 
-                yearDisplay.innerText = yearSlider.value;
-                
-                yearSlider.oninput = function() {
-                    yearDisplay.innerText = this.value;
-                };
-
-                document.getElementById('loading').classList.add('hidden');
-
-            } catch (err) {
-                console.error("Historical Error:", err);
-                alert("AI Generation failed. Try again! Error: " + err.message);
-                window.showMainMenu();
-            }
-        }
-        
-        // Start 3 workers in parallel immediately
         function startBackgroundSystem() {
-            runWorker(1);
-            setTimeout(() => runWorker(2), 200);
-            setTimeout(() => runWorker(3), 400);
+            runWorker();
+            setTimeout(runWorker, 200);
+            setTimeout(runWorker, 400);
         }
 
+        function setPreloadCountry(code) {
+            if (currentPreloadCountry === code) return;
+            currentPreloadCountry = code;
+            PRELOADED_LOCATIONS.length = 0;
+        }
+
+        async function pickRandomLocation() {
+            const requiredCountry = STATE.mode === 'multi' ? null : STATE.selectedCountry;
+            if (PRELOADED_LOCATIONS.length > 0 && currentPreloadCountry === requiredCountry) {
+                return PRELOADED_LOCATIONS.shift();
+            }
+            // Cache empty: race 5 requests, first success wins.
+            const tries = Array.from({ length: 5 }, () => fetchValidLocation(requiredCountry).then(r => r || Promise.reject()));
+            return Promise.any(tries);
+        }
+
+        // ==================== INIT ====================
         function init() {
-            map = L.map('map', { zoomControl: false }).setView([20, 0], 2);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '©CARTO' }).addTo(map);
+            map = L.map('map', { zoomControl: false, attributionControl: true, worldCopyJump: true }).setView([20, 0], 2);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '©CARTO ©OSM' }).addTo(map);
+            $('map-sheet').addEventListener('transitionend', () => map.invalidateSize());
 
             const { Viewer } = mapillary;
             mly = new Viewer({ accessToken: MLY_TOKEN, container: 'mly', component: { cover: false, sequence: false } });
 
             map.on('click', (e) => {
-                if(STATE.isLocked) return;
-                if(guessMarker) map.removeLayer(guessMarker);
-                guessMarker = L.marker(e.latlng).addTo(map);
-                const btn = document.getElementById('confirm-btn');
-                btn.classList.add('active');
-                btn.disabled = false;
-                btn.innerText = t('btn_confirm');
-                if(window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.selectionChanged();
+                if (STATE.isLocked || !$('map-sheet').classList.contains('open')) return;
+                if (guessMarker) guessMarker.setLatLng(e.latlng);
+                else guessMarker = L.marker(e.latlng, { icon: pinIcon('#3b82f6') }).addTo(map);
+                setConfirm('ready');
+                haptic('select');
             });
+
+            const joinInput = $('join-code');
+            joinInput.addEventListener('input', () => {
+                joinInput.value = joinInput.value.replace(/\D/g, '').slice(0, 5);
+                $('btn-join').disabled = joinInput.value.length !== 5;
+            });
+            joinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') window.joinRoom(); });
+            $('country-search').addEventListener('input', renderCountryGrid);
+
+            if (tgv('6.1')) TG.BackButton.onClick(onBack);
 
             applyTranslations();
             renderCountryGrid();
-            
-            // LAUNCH PRELOADER IMMEDIATELY
             startBackgroundSystem();
 
-            document.getElementById('loading').classList.add('hidden');
-            document.getElementById('main-menu').classList.remove('hidden');
+            hideLoading();
+            showScreen('home');
+            renderHome();
+
+            // Deep link: t.me/geogur_bot/app?startapp=12345 joins that room directly (once per launch).
+            const sp = TG?.initDataUnsafe?.start_param;
+            if (sp && /^\d{5}$/.test(sp) && sessionStorage.getItem('geo_sp_used') !== sp) {
+                sessionStorage.setItem('geo_sp_used', sp);
+                $('join-code').value = sp;
+                window.openFriendMenu();
+                connectToRoom(sp, $('btn-join'));
+            }
         }
 
-        function t(key) { return TR[STATE.lang][key] || key; }
-        
         function applyTranslations() {
-            document.querySelectorAll('[data-i18n]').forEach(el => el.innerText = t(el.getAttribute('data-i18n')));
-            document.getElementById('settings-btn').innerText = STATE.lang === 'en' ? '🇺🇸' : '🇷🇺';
+            document.documentElement.lang = STATE.lang;
+            document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = t(el.getAttribute('data-i18n')));
+            document.querySelectorAll('[data-i18n-ph]').forEach(el => el.placeholder = t(el.getAttribute('data-i18n-ph')));
+            $('lang-label').textContent = STATE.lang.toUpperCase();
+            updateCountryPlayBtn();
         }
 
         window.toggleLanguage = () => {
             STATE.lang = STATE.lang === 'en' ? 'ru' : 'en';
             localStorage.setItem('geo_lang', STATE.lang);
+            haptic('light');
             applyTranslations();
+            renderHome();
+            renderCountryGrid();
         };
+
+        // ==================== NAVIGATION ====================
+        const SCREENS = ['home', 'country-screen', 'party-screen', 'lobby-screen', 'profile-screen'];
+
+        function showScreen(id) {
+            SCREENS.forEach(s => $(s).classList.toggle('hidden', s !== id));
+            $('country-footer').classList.toggle('hidden', id !== 'country-screen');
+            STATE.screen = id;
+            document.body.classList.toggle('game-active', id === 'game');
+            if (SCREENS.includes(id)) $(id).scrollTop = 0;
+            if (tgv('6.1')) { id === 'home' ? TG.BackButton.hide() : TG.BackButton.show(); }
+            if (tgv('6.2')) { id === 'game' ? TG.enableClosingConfirmation() : TG.disableClosingConfirmation(); }
+        }
+
+        function onBack() {
+            haptic('light');
+            if (STATE.screen === 'lobby-screen') window.leaveLobby();
+            else if (STATE.screen === 'game') {
+                if ($('map-sheet').classList.contains('open') && !$('map-sheet').classList.contains('result-mode')) window.closeMap();
+                else window.exitGame();
+            }
+            else window.showMainMenu();
+        }
 
         window.showMainMenu = () => {
-            document.getElementById('panorama').style.display = 'none';
-            document.getElementById('mly').style.display = 'block';
-            document.getElementById('date-guess-container').classList.add('hidden');
-            document.body.classList.remove('game-active');
-            document.querySelectorAll('.full-screen-menu').forEach(el => el.classList.add('hidden'));
-            document.getElementById('main-menu').classList.remove('hidden');
-            
-            // Reset country back to global
-            if (STATE.selectedCountry !== null) {
-                STATE.selectedCountry = null;
-                if (currentPreloadCountry !== null) {
-                    currentPreloadCountry = null;
-                    PRELOADED_LOCATIONS.length = 0; // Wipe specific queue to start global preloading
-                }
-            }
+            STATE.session++;
+            clearInterval(STATE.timer);
+            STATE.mode = 'menu';
+            hideLoading();
+            $('summary-modal').classList.add('hidden');
+            resetMapUI();
+
+            // Back to the global pool
+            STATE.selectedCountry = null;
+            setPreloadCountry(null);
+            renderCountryGrid();
+
+            showScreen('home');
+            renderHome();
         };
 
-        // --- COUNTRY MODE UI ---
-        window.openCountryMenu = () => {
-            document.getElementById('main-menu').classList.add('hidden');
-            document.getElementById('country-menu').classList.remove('hidden');
-        };
+        function renderHome() {
+            $('home-name').textContent = STATE.myName;
+            setAvatar($('home-avatar'));
+            $('home-games').textContent = fmt(STATE.totalGames);
+            $('home-avg').textContent = STATE.totalGames ? fmt(STATE.totalScore / STATE.totalGames) : '—';
+            const best = STATE.history.reduce((m, h) => Math.max(m, h.pts || 0), 0);
+            $('home-best').textContent = best ? fmt(best) : '—';
+        }
+
+        // ==================== COUNTRY MODE ====================
+        window.openCountryMenu = () => { haptic('light'); showScreen('country-screen'); };
 
         function renderCountryGrid() {
-            const grid = document.getElementById('country-grid');
+            const grid = $('country-grid');
+            const q = ($('country-search').value || '').trim().toLowerCase();
             grid.innerHTML = '';
-            Object.keys(COUNTRY_POOLS).forEach(code => {
+            const codes = Object.keys(COUNTRY_POOLS)
+                .filter(code => !q || COUNTRY_POOLS[code].name.toLowerCase().includes(q) || (COUNTRY_RU[code] || '').toLowerCase().includes(q))
+                .sort((a, b) => countryName(a).localeCompare(countryName(b)));
+
+            if (!codes.length) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1;">${t('lbl_no_country')}</div>`; return; }
+
+            codes.forEach(code => {
                 const c = COUNTRY_POOLS[code];
                 const div = document.createElement('div');
-                div.className = 'country-card';
-                div.innerHTML = `<span class="c-flag">${c.flag}</span><span class="c-name">${c.name}</span>`;
-                
+                div.className = 'country-card' + (STATE.selectedCountry === code ? ' selected' : '');
+                div.innerHTML = `<span class="c-flag">${c.flag}</span><span class="c-name">${esc(countryName(code))}</span>`;
                 div.onclick = () => {
                     document.querySelectorAll('.country-card').forEach(el => el.classList.remove('selected'));
                     div.classList.add('selected');
                     STATE.selectedCountry = code;
-                    
-                    // Switch Preloader target to this country immediately!
-                    if (currentPreloadCountry !== code) {
-                        currentPreloadCountry = code;
-                        PRELOADED_LOCATIONS.length = 0; // Dump old global queue
-                    }
+                    setPreloadCountry(code); // start warming this country's queue right away
+                    haptic('select');
+                    updateCountryPlayBtn();
                 };
                 grid.appendChild(div);
             });
         }
 
-        window.startCountryGame = (mode) => {
-            if(!STATE.selectedCountry) {
-                if(window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('error');
-                return; 
-            }
-            if(mode === 'endless') window.startEndless();
-            else window.startChallenge();
-        };
-
-        // --- GAME MODES ---
-        window.startEndless = () => {
-            document.body.classList.add('game-active');
-            STATE.mode = 'endless'; STATE.score = 0;
-            updateHUD(); startGameLoop();
-        };
-
-        window.startChallenge = () => {
-            document.body.classList.add('game-active');
-            STATE.mode = 'challenge'; STATE.round = 1; STATE.score = 0; STATE.maxRounds = 5;
-            updateHUD(); startGameLoop();
-        };
-
-        function updateHUD() {
-            document.querySelectorAll('.full-screen-menu').forEach(el => el.classList.add('hidden'));
-            document.getElementById('score-me').innerText = STATE.score;
-            document.getElementById('mp-scores').style.display = 'none';
-            document.getElementById('host-controls').style.display = 'none';
-            document.getElementById('timer-box').classList.add('hidden');
-            document.getElementById('round-indicator').innerText = "";
-
-            if (STATE.mode === 'challenge' || (STATE.mode === 'multi' && STATE.mpModeSelected === 'challenge')) {
-                document.getElementById('round-indicator').innerText = `ROUND ${STATE.round}/${STATE.maxRounds}`;
-                document.getElementById('timer-box').classList.remove('hidden');
-            }
+        function updateCountryPlayBtn() {
+            const btn = $('country-play');
+            const code = STATE.selectedCountry;
+            btn.disabled = !code;
+            $('country-play-label').textContent = code
+                ? t('btn_play_in').replace('{c}', `${COUNTRY_POOLS[code].flag} ${countryName(code)}`)
+                : t('btn_pick_country');
         }
 
-        // --- HIGH SPEED LOCATION PICKER ---
-        async function pickRandomLocation() {
-            const requiredCountry = STATE.mode === 'multi' ? null : STATE.selectedCountry; 
-            
-            // 1. If we have a cached one, use it instantly.
-            if (PRELOADED_LOCATIONS.length > 0 && currentPreloadCountry === requiredCountry) {
-                return PRELOADED_LOCATIONS.shift(); 
-            }
+        window.setCountryMode = (mode) => {
+            STATE.countryMode = mode;
+            $('cm-btn-endless').classList.toggle('active', mode === 'endless');
+            $('cm-btn-chall').classList.toggle('active', mode === 'challenge');
+            haptic('select');
+        };
 
-            // 2. EMERGENCY MODE: The cache is empty (User clicked Start in <1 sec).
-            // We fire 5 requests in parallel and race them. The first one to return wins.
-            const p1 = fetchValidLocation(requiredCountry);
-            const p2 = fetchValidLocation(requiredCountry);
-            const p3 = fetchValidLocation(requiredCountry);
-            const p4 = fetchValidLocation(requiredCountry);
-            const p5 = fetchValidLocation(requiredCountry);
+        window.startCountryGame = () => {
+            if (!STATE.selectedCountry) { haptic('error'); return; }
+            beginGame(STATE.countryMode);
+        };
 
-            // Wait for the first success
-            const winner = await Promise.any([p1, p2, p3, p4, p5].map(p => p.then(res => res || Promise.reject())));
-            return winner; 
+        // ==================== SINGLE PLAYER ====================
+        window.startEndless = () => {
+            STATE.selectedCountry = null;
+            setPreloadCountry(null);
+            beginGame('endless');
+        };
+
+        function beginGame(mode) {
+            haptic('medium');
+            STATE.session++;
+            STATE.mode = mode;
+            STATE.round = 1;
+            STATE.maxRounds = 5;
+            STATE.score = 0;
+            STATE.roundResults = [];
+            $('summary-modal').classList.add('hidden');
+            showScreen('game');
+            updateHUD();
+            startGameLoop();
+        }
+
+        function updateHUD() {
+            $('score-me').textContent = fmt(STATE.score);
+            const timed = STATE.mode === 'challenge';
+            $('round-indicator').textContent = timed
+                ? t('lbl_round_of').replace('{r}', STATE.round).replace('{m}', STATE.maxRounds)
+                : t('lbl_round').replace('{r}', STATE.round);
+            $('timer-box').classList.toggle('hidden', !timed);
+            $('timer-box').classList.remove('warn');
+            if (timed) $('timer-box').textContent = '2:00';
+
+            let label = `🌍 ${t('lbl_world')}`;
+            if (STATE.mode === 'multi') label = `👥 ${t('lbl_party')} · ${STATE.gameId}`;
+            else if (STATE.selectedCountry) label = `${COUNTRY_POOLS[STATE.selectedCountry].flag} ${countryName(STATE.selectedCountry)}`;
+            $('mode-label').textContent = label;
+
+            $('mp-scores').classList.toggle('hidden', STATE.mode !== 'multi');
+            $('host-controls').classList.toggle('hidden', !(STATE.mode === 'multi' && STATE.mpRole === 'host'));
         }
 
         function startGameLoop() {
             resetMapUI();
-            if (STATE.mode !== 'multi') {
-                document.getElementById('loading').classList.remove('hidden');
-                
-                pickRandomLocation()
-                    .then(loc => {
-                        STATE.currentLoc = loc;
-                        loadLocation(loc);
-                        if(STATE.mode === 'challenge') startTimer(120);
-                    })
-                    .catch(() => {
-                        // Rare fail-safe: if race failed, try again recursively
-                        startGameLoop();
-                    });
+            if (STATE.mode === 'multi') { setConfirm('idle'); return; }
 
-            } else {
-                document.getElementById('confirm-btn').innerText = t('btn_waiting');
-            }
-            
+            const s = STATE.session;
+            showLoading(t('lbl_finding'));
+            pickRandomLocation()
+                .then(loc => {
+                    if (s !== STATE.session) return;
+                    STATE.currentLoc = loc;
+                    loadLocation(loc, s);
+                })
+                .catch(() => { if (s === STATE.session) startGameLoop(); });
         }
 
-        function loadLocation(loc) {
+        function loadLocation(loc, s = STATE.session) {
             mly.moveTo(loc.id)
-                .then(() => document.getElementById('loading').classList.add('hidden'))
-                .catch(() => pickRandomLocation().then(l => loadLocation(l)));
+                .then(() => {
+                    if (s !== STATE.session) return;
+                    hideLoading();
+                    // Timer starts only once the panorama is actually visible
+                    if (STATE.mode === 'challenge') startTimer(120);
+                })
+                .catch(() => {
+                    if (s !== STATE.session) return;
+                    if (STATE.mode === 'multi') { hideLoading(); return; }
+                    pickRandomLocation().then(l => {
+                        if (s !== STATE.session) return;
+                        STATE.currentLoc = l;
+                        loadLocation(l, s);
+                    }).catch(() => { if (s === STATE.session) startGameLoop(); });
+                });
+        }
+
+        function setConfirm(state) {
+            const btn = $('confirm-btn');
+            btn.disabled = state !== 'ready';
+            btn.textContent = t(state === 'ready' ? 'btn_confirm' : state === 'waiting' ? 'btn_waiting' : 'btn_guess_tap');
         }
 
         function resetMapUI() {
             STATE.isLocked = false;
-            if (STATE.mode !== 'historical') {
-                document.getElementById('date-guess-container').classList.add('hidden');
-            }
-            document.getElementById('result-sheet').classList.remove('show');
-            document.getElementById('map-container').classList.remove('map-result-mode', 'open');
-            document.getElementById('mobile-map-toggle').style.display = 'flex';
-            document.getElementById('res-mp-list').style.display = 'none';
+            $('result-sheet').classList.remove('show');
+            $('map-sheet').classList.remove('result-mode', 'open', 'expanded');
+            $('guess-fab').classList.remove('hidden');
+            $('res-mp-list').classList.add('hidden');
 
-            if(guessMarker) map.removeLayer(guessMarker);
-            if(resultLine) map.removeLayer(resultLine);
-            if(resultMarker) map.removeLayer(resultMarker);
+            if (guessMarker) map.removeLayer(guessMarker);
+            if (resultLine) map.removeLayer(resultLine);
+            if (resultMarker) map.removeLayer(resultMarker);
             oppMarkers.forEach(m => map.removeLayer(m));
-            oppMarkers =[];
-            
-            guessMarker = null; 
-            map.setView([20,0], 2);
-            
-            const btn = document.getElementById('confirm-btn');
-            btn.classList.remove('active');
-            btn.innerText = t('btn_guess_tap');
-            btn.disabled = true;
-            document.getElementById('next-btn').classList.remove('loading');
+            oppMarkers = [];
+            guessMarker = resultLine = resultMarker = null;
+            map.setView([20, 0], 2);
+
+            $('host-controls').classList.toggle('hidden', !(STATE.mode === 'multi' && STATE.mpRole === 'host'));
+            setConfirm('idle');
+            $('next-btn').classList.remove('loading');
+            $('next-btn').disabled = false;
         }
 
         function startTimer(seconds) {
@@ -1333,33 +1739,242 @@
             STATE.timer = setInterval(() => {
                 STATE.timeLeft--;
                 updateTimerDisplay();
-                if(STATE.timeLeft <= 0) {
+                if (STATE.timeLeft <= 10 && STATE.timeLeft > 0) haptic('light');
+                if (STATE.timeLeft <= 0) {
                     clearInterval(STATE.timer);
-                    if(!STATE.isLocked) window.submitGuess(true); 
+                    if (!STATE.isLocked) window.submitGuess(true);
                 }
             }, 1000);
         }
 
         function updateTimerDisplay() {
-            const min = Math.floor(STATE.timeLeft / 60);
-            const sec = STATE.timeLeft % 60;
-            document.getElementById('timer-box').innerText = `0${min}:${sec < 10 ? '0'+sec : sec}`;
+            const left = Math.max(0, STATE.timeLeft);
+            const min = Math.floor(left / 60);
+            const sec = left % 60;
+            const box = $('timer-box');
+            box.textContent = `${min}:${sec < 10 ? '0' + sec : sec}`;
+            box.classList.toggle('warn', left <= 15);
         }
 
-        // --- MULTIPLAYER ---
-        window.openFriendMenu = () => {
-            document.getElementById('main-menu').classList.add('hidden');
-            document.getElementById('friend-menu').classList.remove('hidden');
+        // ==================== MAP SHEET ====================
+        window.openMap = () => {
+            haptic('light');
+            $('map-sheet').classList.add('open');
+            $('guess-fab').classList.add('hidden');
+            setTimeout(() => map.invalidateSize(), 50);
+        };
+        window.closeMap = () => {
+            $('map-sheet').classList.remove('open', 'expanded');
+            $('guess-fab').classList.remove('hidden');
+        };
+        window.toggleMapSize = () => {
+            haptic('light');
+            $('map-sheet').classList.toggle('expanded');
+        };
+        window.toggleScoreboard = () => {
+            if (STATE.mode !== 'multi') return;
+            $('mp-scores').classList.toggle('collapsed');
+            haptic('select');
         };
 
+        // ==================== SUBMIT & RESULTS ====================
+        window.submitGuess = (force = false) => {
+            if ((!guessMarker && !force) || STATE.isLocked || !STATE.currentLoc) return;
+            clearInterval(STATE.timer);
+            STATE.isLocked = true;
+
+            const missed = !guessMarker;
+            const uLat = missed ? null : guessMarker.getLatLng();
+            const aLat = L.latLng(STATE.currentLoc.lat, STATE.currentLoc.lng);
+            const dist = missed ? 0 : map.distance(uLat, aLat);
+            const pts = missed ? 0 : scoreFor(dist);
+
+            haptic('success');
+
+            STATE.totalScore += pts; STATE.totalGames++;
+            localStorage.setItem('geo_total_score', STATE.totalScore.toString());
+            localStorage.setItem('geo_total_games', STATE.totalGames.toString());
+            const locName = STATE.currentLoc.city?.name || "Unknown";
+            STATE.history.push({ date: new Date().toLocaleDateString(), pts, loc: locName, flag: STATE.currentLoc.city?.flag || '' });
+            if (STATE.history.length > 200) STATE.history = STATE.history.slice(-200);
+            localStorage.setItem('geo_history', JSON.stringify(STATE.history));
+
+            if (STATE.mode === 'multi') {
+                setConfirm('waiting');
+                const g = { pts, name: STATE.myName };
+                if (uLat) { g.lat = uLat.lat; g.lng = uLat.lng; }
+                update(ref(db, `games/${STATE.gameId}/guesses/${STATE.myUid}`), g);
+                return;
+            }
+
+            STATE.score += pts;
+            STATE.roundResults.push({ loc: locName, flag: STATE.currentLoc.city?.flag || '', pts, dist, missed });
+            $('score-me').textContent = fmt(STATE.score);
+            showSingleResult(uLat, aLat, dist, pts, missed);
+        };
+
+        function fillResultSheet(pts, dist, missed) {
+            $('res-pts').textContent = '0';
+            animateNumber($('res-pts'), pts);
+            $('res-bar').style.width = '0';
+            requestAnimationFrame(() => requestAnimationFrame(() => $('res-bar').style.width = (pts / MAX_PTS * 100) + '%'));
+            $('res-dist').textContent = missed ? t('lbl_missed') : formatDist(dist);
+            $('res-dist-lbl').classList.toggle('hidden', missed);
+            $('res-loc-name').textContent = STATE.currentLoc.city?.name || '';
+            $('res-loc-flag').textContent = STATE.currentLoc.city?.flag || '🌍';
+            if (pts >= 4500) confetti({ particleCount: 120, spread: 80, origin: { y: 0.7 }, zIndex: 9999 });
+        }
+
+        function showSingleResult(uLat, aLat, dist, pts, missed) {
+            fillResultSheet(pts, dist, missed);
+            const nextBtn = $('next-btn');
+            const last = STATE.mode === 'challenge' && STATE.round >= STATE.maxRounds;
+            nextBtn.querySelector('.btn-label').textContent = t(last ? 'btn_finish' : 'btn_next');
+            nextBtn.onclick = last ? showSummary : window.nextRound;
+            $('result-sheet').classList.add('show');
+            setupResultMap(uLat, aLat);
+        }
+
+        function showMpResult(guesses, locData) {
+            $('host-controls').classList.add('hidden');
+            const actual = L.latLng(locData.lat, locData.lng);
+            const myGuess = guesses[STATE.myUid];
+            const myLat = myGuess && myGuess.lat != null ? L.latLng(myGuess.lat, myGuess.lng) : null;
+
+            Object.keys(guesses).forEach(uid => {
+                const g = guesses[uid];
+                if (uid === STATE.myUid || g.lat == null) return;
+                const m = L.circleMarker([g.lat, g.lng], { radius: 6, color: '#fff', weight: 2, fillColor: '#ef4444', fillOpacity: 1 })
+                    .bindTooltip(esc(g.name), { permanent: true, direction: 'top', className: 'opp-tip', offset: [0, -6] })
+                    .addTo(map);
+                oppMarkers.push(m);
+            });
+
+            const pts = myGuess ? myGuess.pts : 0;
+            const dist = myLat ? map.distance(myLat, actual) : 0;
+            fillResultSheet(pts, dist, !myLat);
+
+            const list = $('res-mp-list');
+            list.classList.remove('hidden');
+            list.innerHTML = '';
+            Object.keys(guesses).map(uid => ({ uid, ...guesses[uid] })).sort((a, b) => b.pts - a.pts).forEach((g, i) => {
+                const r = document.createElement('div');
+                r.className = 'res-mp-row' + (g.uid === STATE.myUid ? ' me' : '');
+                r.innerHTML = `<span class="rank">${['🥇', '🥈', '🥉'][i] || i + 1}</span><span class="nm">${esc(g.name)}</span><span class="pts">+${fmt(g.pts)}</span>`;
+                list.appendChild(r);
+            });
+
+            const nextBtn = $('next-btn');
+            if (STATE.mpRole === 'host') {
+                nextBtn.disabled = false;
+                nextBtn.querySelector('.btn-label').textContent = t('btn_next');
+                nextBtn.onclick = window.nextRound;
+                get(ref(db, `games/${STATE.gameId}/players`)).then(snap => {
+                    const p = snap.val() || {};
+                    Object.keys(guesses).forEach(uid => { if (p[uid]) p[uid].score = (p[uid].score || 0) + guesses[uid].pts; });
+                    update(ref(db, `games/${STATE.gameId}/players`), p);
+                });
+            } else {
+                nextBtn.disabled = true;
+                nextBtn.querySelector('.btn-label').textContent = t('btn_waiting_host');
+            }
+            $('result-sheet').classList.add('show');
+            setupResultMap(myLat, actual);
+        }
+
+        function setupResultMap(uLat, aLat) {
+            $('guess-fab').classList.add('hidden');
+            const ms = $('map-sheet');
+            ms.classList.remove('expanded');
+            ms.classList.add('open', 'result-mode');
+
+            resultMarker = L.marker(aLat, { icon: pinIcon('#22c55e'), zIndexOffset: 1000 }).addTo(map);
+            if (uLat) resultLine = L.polyline([uLat, aLat], { color: '#1e293b', weight: 3, dashArray: '6 8', opacity: 0.85 }).addTo(map);
+
+            setTimeout(() => {
+                map.invalidateSize();
+                const sheetH = $('result-sheet').offsetHeight;
+                const top = (parseInt(getComputedStyle($('hud')).top) || 0) + 60;
+                const points = [aLat];
+                if (uLat) points.push(uLat);
+                oppMarkers.forEach(m => points.push(m.getLatLng()));
+                if (points.length > 1) {
+                    map.fitBounds(L.latLngBounds(points), { paddingTopLeft: [40, top], paddingBottomRight: [40, sheetH + 30], maxZoom: 15, animate: true });
+                } else {
+                    map.setView(aLat, 6);
+                    map.panBy([0, sheetH / 2], { animate: false });
+                }
+            }, 80);
+        }
+
+        window.nextRound = () => {
+            const btn = $('next-btn');
+            btn.classList.add('loading');
+            haptic('light');
+
+            if (STATE.mode === 'endless' || STATE.mode === 'challenge') {
+                STATE.round++;
+                updateHUD();
+                startGameLoop();
+            } else if (STATE.mode === 'multi' && STATE.mpRole === 'host') {
+                const nextR = STATE.round + 1;
+                update(ref(db, `games/${STATE.gameId}`), {
+                    status: 'next_round', round: nextR, guesses: null, forceEndRound: null
+                }).then(() => pickRandomLocation()).then(loc => {
+                    update(ref(db, `games/${STATE.gameId}`), { location: loc, status: 'playing' });
+                }).catch(() => { btn.classList.remove('loading'); toast(t('msg_net_error')); });
+            }
+        };
+
+        function showSummary() {
+            STATE.session++;
+            clearInterval(STATE.timer);
+            hideLoading();
+            const isChallenge = STATE.mode === 'challenge';
+            const rounds = STATE.roundResults;
+            const avg = rounds.length ? STATE.score / rounds.length : 0;
+
+            $('summary-title').textContent = t(isChallenge ? 'lbl_game_over' : 'lbl_session_over');
+            $('summary-emoji').textContent = avg >= 4000 ? '🏆' : avg >= 2500 ? '🎉' : avg >= 1000 ? '👍' : '🧭';
+            $('summary-sub').textContent = t('lbl_rounds_played').replace('{n}', rounds.length);
+            $('final-score').textContent = '0';
+
+            const list = $('summary-rounds');
+            list.innerHTML = '';
+            rounds.forEach((r, i) => {
+                const row = document.createElement('div');
+                row.className = 'sum-row';
+                row.innerHTML = `<span class="r">${i + 1}</span><span class="l">${r.flag} ${esc(r.loc)}<div class="d">${r.missed ? t('lbl_missed') : formatDist(r.dist)}</div></span><span class="pts">+${fmt(r.pts)}</span>`;
+                list.appendChild(row);
+            });
+
+            $('summary-modal').classList.remove('hidden');
+            $('summary-modal').scrollTop = 0;
+            STATE.screen = 'summary';
+            if (tgv('6.2')) TG.disableClosingConfirmation();
+            animateNumber($('final-score'), STATE.score, 1200);
+            haptic('success');
+            if (avg >= 2500) confetti({ particleCount: 200, spread: 100, zIndex: 9999 });
+        }
+
+        window.playAgain = () => beginGame(STATE.mode === 'challenge' ? 'challenge' : 'endless');
+
+        window.exitGame = async () => {
+            if (STATE.mode === 'multi') { window.leaveLobby(); return; }
+            if (STATE.mode === 'challenge' && !(await tgConfirm(t('msg_exit_confirm')))) return;
+            if (STATE.mode === 'endless' && STATE.roundResults.length > 0) { resetMapUI(); showSummary(); return; }
+            window.showMainMenu();
+        };
+
+        // ==================== MULTIPLAYER ====================
+        window.openFriendMenu = () => { haptic('light'); showScreen('party-screen'); };
+
         window.createRoom = () => {
-            const btn = document.getElementById('btn-create');
+            const btn = $('btn-create');
+            if (btn.classList.contains('loading')) return;
             btn.classList.add('loading');
             const code = Math.floor(10000 + Math.random() * 90000).toString();
-            STATE.gameId = code;
-            STATE.mpRole = 'host';
-            STATE.mode = 'multi';
-            
+
             const initialData = {
                 status: 'waiting',
                 round: 1,
@@ -1369,94 +1984,143 @@
 
             set(ref(db, 'games/' + code), initialData).then(() => {
                 btn.classList.remove('loading');
+                STATE.gameId = code;
+                STATE.mpRole = 'host';
+                STATE.mode = 'multi';
                 enterLobby(code);
-            });
+            }).catch(() => { btn.classList.remove('loading'); toast(t('msg_net_error')); });
         };
 
         window.joinRoom = () => {
-            const code = document.getElementById('join-code').value;
-            if(code.length !== 5) return;
-            const btn = document.getElementById('btn-join');
+            const code = $('join-code').value;
+            if (code.length !== 5) return;
+            const btn = $('btn-join');
+            if (btn.classList.contains('loading')) return;
             btn.classList.add('loading');
             connectToRoom(code, btn);
         };
 
         function connectToRoom(code, btn) {
-             get(ref(db, 'games/' + code)).then((snap) => {
-                if(btn) btn.classList.remove('loading');
-                if(snap.exists()) {
-                    const data = snap.val();
-                    if (Object.keys(data.players || {}).length >= 20) {
-                         alert(t('msg_room_full')); return;
-                    }
-                    STATE.gameId = code;
-                    STATE.mpRole = 'guest';
-                    STATE.mode = 'multi';
-                    update(ref(db, `games/${code}/players/${STATE.myUid}`), {
-                        name: STATE.myName, score: 0, avatar: '👤'
-                    });
-                    enterLobby(code);
-                } else {
-                    alert(t('msg_room_not_found'));
+            get(ref(db, 'games/' + code)).then((snap) => {
+                if (btn) btn.classList.remove('loading');
+                if (!snap.exists()) { haptic('error'); tgAlert(t('msg_room_not_found')); return; }
+                const data = snap.val();
+                if (Object.keys(data.players || {}).length >= 20 && !(data.players || {})[STATE.myUid]) {
+                    haptic('error'); tgAlert(t('msg_room_full')); return;
                 }
-            });
+                STATE.gameId = code;
+                STATE.mpRole = data.host === STATE.myUid ? 'host' : 'guest';
+                STATE.mode = 'multi';
+                update(ref(db, `games/${code}/players/${STATE.myUid}`), { name: STATE.myName, score: 0, avatar: '👤' })
+                    .then(() => enterLobby(code));
+            }).catch(() => { if (btn) btn.classList.remove('loading'); toast(t('msg_net_error')); });
+        }
+
+        function parseRoomCode(text) {
+            const s = String(text || '').trim();
+            if (/^\d{5}$/.test(s)) return s;
+            const m = s.match(/startapp=(\d{5})\b/);
+            return m ? m[1] : null;
         }
 
         window.scanQR = () => {
-            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.showScanQrPopup) {
-                window.Telegram.WebApp.showScanQrPopup({ text: t('msg_qr_popup') }, (data) => {
-                    if (data && data.length === 5 && !isNaN(data)) {
-                        window.Telegram.WebApp.closeScanQrPopup();
-                        document.getElementById('join-code').value = data;
+            if (tgv('6.4') && TG.showScanQrPopup) {
+                TG.showScanQrPopup({ text: t('msg_qr_popup') }, (data) => {
+                    const code = parseRoomCode(data);
+                    TG.closeScanQrPopup();
+                    if (code) {
+                        $('join-code').value = code;
+                        $('btn-join').disabled = false;
                         window.joinRoom();
                     } else {
-                        window.Telegram.WebApp.closeScanQrPopup();
-                        alert(t('msg_qr_invalid'));
+                        haptic('error');
+                        tgAlert(t('msg_qr_invalid'));
                     }
                     return true;
                 });
             } else {
-                alert(t('msg_qr_mobile_only'));
+                tgAlert(t('msg_qr_mobile_only'));
             }
         };
 
-        function enterLobby(code) {
-            document.getElementById('friend-menu').classList.add('hidden');
-            document.getElementById('lobby-screen').classList.remove('hidden');
-            document.getElementById('lobby-code-display').innerText = code;
-            
-            document.getElementById('lobby-qr-container').innerHTML = "";
-            new QRCode(document.getElementById('lobby-qr-container'), { text: code, width: 128, height: 128 });
+        function roomLink(code) { return `${BOT_APP_LINK}?startapp=${code}`; }
 
-            if(STATE.mpRole === 'host') document.getElementById('host-actions').classList.remove('hidden');
+        function enterLobby(code) {
+            haptic('success');
+            STATE.currentLoc = null;
+            STATE.round = 1;
+            showScreen('lobby-screen');
+            $('lobby-code-display').textContent = code;
+            $('lobby-qr-container').innerHTML = "";
+            // The QR holds a deep link, so even a regular phone camera opens the app straight into this room.
+            new QRCode($('lobby-qr-container'), { text: roomLink(code), width: 300, height: 300, correctLevel: QRCode.CorrectLevel.M });
+
+            const isHost = STATE.mpRole === 'host';
+            $('host-actions').classList.toggle('hidden', !isHost);
+            $('lobby-status').classList.toggle('hidden', isHost);
             listenToLobby(code);
         }
 
-        window.hostStartGame = () => update(ref(db, `games/${STATE.gameId}`), { status: 'starting' });
-        
-        window.leaveLobby = () => {
-            if(STATE.gameId) remove(ref(db, `games/${STATE.gameId}/players/${STATE.myUid}`));
+        window.copyCode = () => {
+            const code = STATE.gameId;
+            const done = () => { haptic('success'); toast(t('msg_copied')); };
+            if (navigator.clipboard?.writeText) navigator.clipboard.writeText(code).then(done).catch(() => fallbackCopy(code, done));
+            else fallbackCopy(code, done);
+        };
+        function fallbackCopy(text, done) {
+            const ta = document.createElement('textarea');
+            ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); done(); } catch (e) { }
+            ta.remove();
+        }
+
+        window.inviteFriends = () => {
+            const text = t('msg_invite_text').replace('{c}', STATE.gameId);
+            const url = `https://t.me/share/url?url=${encodeURIComponent(roomLink(STATE.gameId))}&text=${encodeURIComponent(text)}`;
+            if (TG && tgv('6.1')) TG.openTelegramLink(url); else window.open(url, '_blank');
+        };
+
+        window.hostStartGame = () => {
+            haptic('medium');
+            update(ref(db, `games/${STATE.gameId}`), { status: 'starting' });
+        };
+
+        window.leaveLobby = async () => {
+            const inGame = STATE.screen === 'game';
+            if (!(await tgConfirm(t(inGame ? 'msg_exit_confirm' : 'msg_leave_room')))) return;
+            if (STATE.lobbyUnsub) STATE.lobbyUnsub();
+            if (STATE.gameUnsub) STATE.gameUnsub();
+            if (STATE.gameId) {
+                // When the host leaves, the room closes for everyone.
+                const target = STATE.mpRole === 'host' ? `games/${STATE.gameId}` : `games/${STATE.gameId}/players/${STATE.myUid}`;
+                try { await remove(ref(db, target)); } catch (e) { }
+            }
             window.location.reload();
         };
 
         function listenToLobby(code) {
-            onValue(ref(db, 'games/' + code), (snap) => {
+            if (STATE.lobbyUnsub) STATE.lobbyUnsub();
+            let gameStarted = false;
+            STATE.lobbyUnsub = onValue(ref(db, 'games/' + code), (snap) => {
                 const data = snap.val();
-                if(!data) { alert(t('msg_room_closed')); window.location.reload(); return; }
-                if(!data.players || !data.players[STATE.myUid]) {
-                    alert(t('msg_kicked')); window.location.reload(); return;
+                if (!data) { STATE.lobbyUnsub(); tgAlert(t('msg_room_closed')); setTimeout(() => window.location.reload(), 300); return; }
+                if (!data.players || !data.players[STATE.myUid]) {
+                    STATE.lobbyUnsub(); tgAlert(t('msg_kicked')); setTimeout(() => window.location.reload(), 300); return;
                 }
                 renderPlayerList(data.players, data.host);
 
-                if(data.status === 'starting' || data.status === 'playing') {
-                    document.getElementById('lobby-screen').classList.add('hidden');
-                    document.body.classList.add('game-active');
-                    if(STATE.mpRole === 'host' && data.status === 'starting') {
+                if (!gameStarted && (data.status === 'starting' || data.status === 'playing' || data.status === 'next_round' || data.status === 'results')) {
+                    gameStarted = true;
+                    showScreen('game');
+                    updateHUD();
+                    setConfirm('idle');
+                    if (STATE.mpRole === 'host' && data.status === 'starting') {
                         update(ref(db, `games/${code}`), { status: 'playing' });
-                        document.getElementById('loading').classList.remove('hidden');
-                        pickRandomLocation().then(loc => {
-                            update(ref(db, `games/${code}`), { location: loc });
-                        });
+                        showLoading(t('lbl_finding'));
+                        pickRandomLocation().then(loc => update(ref(db, `games/${code}`), { location: loc }));
+                    } else if (!data.location) {
+                        showLoading(t('lbl_finding'));
                     }
                     listenToGame(code);
                 }
@@ -1464,255 +2128,119 @@
         }
 
         function renderPlayerList(players, hostId) {
-            const list = document.getElementById('player-list');
+            const list = $('player-list');
             list.innerHTML = '';
-            Object.keys(players).forEach(uid => {
+            const ids = Object.keys(players).sort((a, b) => (b === hostId) - (a === hostId));
+            $('player-count').textContent = ids.length;
+            ids.forEach(uid => {
                 const p = players[uid];
                 const div = document.createElement('div');
                 div.className = 'player-item';
-                div.innerHTML = `<div style="display:flex; align-items:center; gap:10px;"><span>${p.avatar}</span> <span>${p.name}</span></div>`;
+                let badges = '';
+                if (uid === hostId) badges += `<span class="badge">👑 ${t('lbl_host_badge')}</span>`;
+                if (uid === STATE.myUid) badges += `<span class="badge you">${t('lbl_you')}</span>`;
+                div.innerHTML = `<div class="avatar sm">${esc(initials(p.name))}</div><span class="player-name">${esc(p.name)}</span>${badges}`;
                 list.appendChild(div);
             });
         }
 
         function listenToGame(code) {
-            document.getElementById('mp-scores').style.display = 'flex';
-            if(STATE.mpRole === 'host') document.getElementById('host-controls').style.display = 'flex';
-
-            onValue(ref(db, 'games/' + code), (snap) => {
+            if (STATE.gameUnsub) STATE.gameUnsub();
+            STATE.gameUnsub = onValue(ref(db, 'games/' + code), (snap) => {
                 const data = snap.val();
-                if(!data) return;
+                if (!data || !data.players) return;
 
-                if(data.status === 'next_round') {
-                    document.getElementById('loading').classList.remove('hidden');
-                    document.getElementById('result-sheet').classList.remove('show');
+                if (data.status === 'next_round') {
+                    showLoading(t('lbl_finding'));
+                    $('result-sheet').classList.remove('show');
                 }
 
                 renderMpScores(data.players);
 
-                if(data.location && (!STATE.currentLoc || STATE.currentLoc.id !== data.location.id)) {
+                if (data.location && (!STATE.currentLoc || STATE.currentLoc.id !== data.location.id)) {
                     STATE.currentLoc = data.location;
-                    STATE.round = data.round;
+                    STATE.round = data.round || 1;
                     updateHUD();
-                    loadLocation(data.location);
                     resetMapUI();
-                    if(data.mode === 'challenge') startTimer(120);
+                    showLoading(t('lbl_finding'));
+                    loadLocation(data.location);
                 }
 
-                if(data.forceEndRound && !STATE.isLocked) window.submitGuess(true);
+                if (data.forceEndRound && !STATE.isLocked) window.submitGuess(true);
 
                 const guesses = data.guesses || {};
-                const playerIds = Object.keys(data.players);
-                const allGuessed = playerIds.every(uid => guesses[uid]);
-                
-                if( (allGuessed || data.status === 'results') && !document.getElementById('result-sheet').classList.contains('show') ) {
+                const allGuessed = Object.keys(data.players).every(uid => guesses[uid]);
+
+                if (data.location && (allGuessed || data.status === 'results') && !$('result-sheet').classList.contains('show') && data.status !== 'next_round') {
                     clearInterval(STATE.timer);
+                    hideLoading();
                     showMpResult(guesses, data.location);
                 }
             });
         }
 
         function renderMpScores(players) {
-            const container = document.getElementById('mp-scores');
+            const container = $('mp-scores');
             container.innerHTML = '';
-            Object.values(players).sort((a,b) => b.score - a.score).forEach(p => {
+            Object.keys(players).map(uid => ({ uid, ...players[uid] })).sort((a, b) => (b.score || 0) - (a.score || 0)).forEach((p, i) => {
                 const div = document.createElement('div');
-                div.innerHTML = `<div style="display:flex; justify-content:space-between;"><span>${p.name}</span> <span style="color:#f1c40f">${p.score}</span></div>`;
+                div.className = 'mp-row' + (p.uid === STATE.myUid ? ' me' : '');
+                div.innerHTML = `<span>${i + 1}. ${esc(p.name)}</span><span class="pts">${fmt(p.score || 0)}</span>`;
                 container.appendChild(div);
+                if (p.uid === STATE.myUid) $('score-me').textContent = fmt(p.score || 0);
             });
         }
-        
-        window.hostForceRoundEnd = () => update(ref(db, `games/${STATE.gameId}`), { status: 'results', forceEndRound: true });
 
-        // --- SUBMIT ---
-        window.submitGuess = (force = false) => {
-            if((!guessMarker && !force) || STATE.isLocked) return;
-            clearInterval(STATE.timer);
-            STATE.isLocked = true;
-            
-            const uLat = guessMarker ? guessMarker.getLatLng() : L.latLng(0,0);
-            let aLat, dist, pts;
-
-            if (STATE.mode === 'historical') {
-                aLat = L.latLng(STATE.historicalData.lat, STATE.historicalData.lng);
-                dist = map.distance(uLat, aLat);
-                
-                // Calculate Location Score (max 5000)
-                const locPts = (force && !guessMarker) ? 0 : Math.round(5000 * Math.exp(-dist / 120000)); 
-                
-                // Calculate Year Score (max 5000, drops off by 20 points per year off)
-                const guessedYear = parseInt(document.getElementById('guess-year').value) || 0;
-                const actualYear = STATE.historicalData.year;
-                const yearDiff = Math.abs(actualYear - guessedYear);
-                const yearPts = Math.max(0, 5000 - (yearDiff * 20));
-
-                pts = locPts + yearPts;
-                STATE.currentLoc = { city: { name: `Year: ${actualYear} | ${STATE.historicalData.city}`, flag: "⏳" }};
-                
-            } else {
-                aLat = L.latLng(STATE.currentLoc.lat, STATE.currentLoc.lng);
-                dist = map.distance(uLat, aLat);
-                pts = (force && !guessMarker) ? 0 : Math.round(5000 * Math.exp(-dist / 120000)); 
-            }
-
-            if(window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-
-            STATE.totalScore += pts; STATE.totalGames++; 
-            localStorage.setItem('geo_total_score', STATE.totalScore.toString());
-            localStorage.setItem('geo_total_games', STATE.totalGames.toString());
-            STATE.history.push({ date: new Date().toLocaleDateString(), pts: pts, loc: STATE.currentLoc.city.name || "Unknown" });
-            localStorage.setItem('geo_history', JSON.stringify(STATE.history));
-
-            if(STATE.mode === 'multi') {
-                document.getElementById('confirm-btn').innerText = t('btn_waiting');
-                update(ref(db, `games/${STATE.gameId}/guesses/${STATE.myUid}`), {
-                    lat: uLat.lat, lng: uLat.lng, pts: pts, name: STATE.myName
-                });
-                return;
-            }
-
-            STATE.score += pts;
-            showSingleResult(uLat, aLat, dist, pts);
+        window.hostForceRoundEnd = () => {
+            haptic('medium');
+            update(ref(db, `games/${STATE.gameId}`), { status: 'results', forceEndRound: true });
         };
 
-        function showSingleResult(uLat, aLat, dist, pts) {
-            setupResultMap(uLat, aLat);
-            document.getElementById('res-dist').innerText = formatDist(dist);
-            document.getElementById('res-pts').innerText = "+" + pts + " pts";
-            document.getElementById('res-loc-name').innerHTML = STATE.currentLoc.city.name + " " + STATE.currentLoc.city.flag;
-            
-            const nextBtn = document.getElementById('next-btn');
-            if (STATE.mode === 'challenge' && STATE.round >= STATE.maxRounds) {
-                nextBtn.querySelector('.btn-content').innerText = t('btn_finish');
-                nextBtn.onclick = showSummary;
-            } else {
-                nextBtn.querySelector('.btn-content').innerText = t('btn_next');
-                nextBtn.onclick = window.nextRound;
-            }
-            document.getElementById('result-sheet').classList.add('show');
-        }
-
-        function showMpResult(guesses, locData) {
-            const actual = L.latLng(locData.lat, locData.lng);
-            const myGuess = guesses[STATE.myUid];
-            
-            setupResultMap(myGuess ? L.latLng(myGuess.lat, myGuess.lng) : actual, actual);
-            
-            Object.keys(guesses).forEach(uid => {
-                if(uid === STATE.myUid) return;
-                const g = guesses[uid];
-                const m = L.circleMarker([g.lat, g.lng], { radius:4, color:'#ff4b2b', fillColor:'#ff4b2b', fillOpacity:0.8 }).addTo(map);
-                oppMarkers.push(m);
-            });
-
-            const pts = myGuess ? myGuess.pts : 0;
-            const dist = myGuess ? map.distance(L.latLng(myGuess.lat, myGuess.lng), actual) : 0;
-            
-            document.getElementById('res-dist').innerText = myGuess ? formatDist(dist) : t('lbl_missed');
-            document.getElementById('res-pts').innerText = "+" + pts + " pts";
-            document.getElementById('res-loc-name').innerHTML = STATE.currentLoc.city.name + " " + (STATE.currentLoc.city.flag || "");
-
-            const list = document.getElementById('res-mp-list');
-            list.style.display = 'block'; list.innerHTML = '';
-            Object.values(guesses).sort((a,b)=>b.pts - a.pts).forEach(g => {
-                const r = document.createElement('div');
-                r.style.cssText = "display:flex; justify-content:space-between; margin-bottom:4px; font-size:0.8rem;";
-                r.innerHTML = `<span>${g.name}</span> <span style="color:#f1c40f">+${g.pts}</span>`;
-                list.appendChild(r);
-            });
-
-            const nextBtn = document.getElementById('next-btn');
-            if(STATE.mpRole === 'host') {
-                 nextBtn.disabled = false;
-                 nextBtn.querySelector('.btn-content').innerText = t('btn_next');
-                 nextBtn.onclick = window.nextRound;
-                 get(ref(db, `games/${STATE.gameId}/players`)).then(snap => {
-                    const p = snap.val();
-                    Object.keys(guesses).forEach(uid => { if(p[uid]) p[uid].score += guesses[uid].pts; });
-                    update(ref(db, `games/${STATE.gameId}/players`), p);
-                 });
-            } else {
-                 nextBtn.disabled = true;
-                 nextBtn.querySelector('.btn-content').innerText = t('btn_waiting');
-            }
-            document.getElementById('result-sheet').classList.add('show');
-        }
-
-        function setupResultMap(uLat, aLat) {
-            document.getElementById('mobile-map-toggle').style.display = 'none';
-            document.getElementById('map-container').classList.add('map-result-mode', 'open');
-            setTimeout(() => map.invalidateSize(), 200);
-
-            resultMarker = L.circleMarker(aLat, { radius: 8, color: '#fff', fillColor: '#00ff00', fillOpacity: 1 }).addTo(map);
-            resultLine = L.polyline([uLat, aLat], { color: '#00C6FF', weight: 4 }).addTo(map);
-            const group = new L.featureGroup([L.marker(uLat), resultMarker]);
-            map.fitBounds(group.getBounds(), { padding:[50, 50], maxZoom: 16 });
-        }
-
-        window.nextRound = () => {
-            const btn = document.getElementById('next-btn');
-            btn.classList.add('loading');
-            
-            if(STATE.mode === 'endless' || STATE.mode === 'challenge') {
-                if(STATE.mode === 'challenge') STATE.round++;
-                startGameLoop();
-            } else if (STATE.mode === 'historical') {
-                // ADDED THIS: Now it knows what to do for Historical Mode!
-                startHistoricalRound();
-            } else if (STATE.mode === 'multi' && STATE.mpRole === 'host') {
-                const nextR = STATE.round + 1;
-                update(ref(db, `games/${STATE.gameId}`), {
-                    status: 'next_round', round: nextR, guesses: null, forceEndRound: null
-                }).then(() => {
-                    pickRandomLocation().then(loc => {
-                        update(ref(db, `games/${STATE.gameId}`), { location: loc, status: 'playing' });
-                    });
-                });
-            }
-        };
-
-        function showSummary() {
-            document.getElementById('summary-modal').style.display = 'flex';
-            document.getElementById('final-score').innerText = STATE.score;
-            confetti({ particleCount: 200, spread: 100 });
-        }
-
-        window.toggleMap = () => {
-            const c = document.getElementById('map-container');
-            const b = document.getElementById('mobile-map-toggle');
-            if(c.classList.contains('open')) { c.classList.remove('open'); b.innerText = "🗺️"; } 
-            else { c.classList.add('open'); b.innerText = "✖"; setTimeout(() => map.invalidateSize(), 300); }
-        };
-
+        // ==================== PROFILE ====================
         window.openProfile = () => {
-            document.getElementById('main-menu').classList.add('hidden');
-            document.getElementById('profile-screen').classList.remove('hidden');
-            document.getElementById('pf-name').innerText = STATE.myName;
-            document.getElementById('pf-total-games').innerText = STATE.totalGames;
-            document.getElementById('pf-total-score').innerText = STATE.totalScore;
-            
-            const list = document.getElementById('history-list'); list.innerHTML = '';
-            [...STATE.history].reverse().slice(0, 30).forEach(h => {
-                const d = document.createElement('div'); d.style.cssText="padding:10px; border-bottom:1px solid rgba(255,255,255,0.1); display:flex; justify-content:space-between;";
-                d.innerHTML = `<span>${h.loc}</span> <span style="color:#f1c40f">+${h.pts}</span>`;
+            haptic('light');
+            showScreen('profile-screen');
+            $('pf-name').textContent = STATE.myName;
+            setAvatar($('pf-avatar'));
+            $('pf-total-games').textContent = fmt(STATE.totalGames);
+            $('pf-total-score').textContent = fmt(STATE.totalScore);
+            const best = STATE.history.reduce((m, h) => Math.max(m, h.pts || 0), 0);
+            $('pf-best').textContent = best ? fmt(best) : '—';
+
+            const XP_PER_LEVEL = 10000;
+            const level = Math.floor(STATE.totalScore / XP_PER_LEVEL) + 1;
+            const into = STATE.totalScore % XP_PER_LEVEL;
+            $('pf-level').textContent = t('lbl_level').replace('{l}', level);
+            $('pf-level-next').textContent = `${fmt(into)} / ${fmt(XP_PER_LEVEL)} XP`;
+            $('pf-level-bar').style.width = '0';
+            requestAnimationFrame(() => requestAnimationFrame(() => $('pf-level-bar').style.width = (into / XP_PER_LEVEL * 100) + '%'));
+
+            const list = $('history-list');
+            list.innerHTML = '';
+            const items = [...STATE.history].reverse().slice(0, 30);
+            if (!items.length) { list.innerHTML = `<div class="empty">${t('lbl_no_history')}</div>`; return; }
+            items.forEach(h => {
+                const d = document.createElement('div');
+                d.className = 'history-item';
+                d.innerHTML = `<div class="history-main"><div class="history-loc">${esc(h.flag || '📍')} ${esc(h.loc)}</div><div class="history-date">${esc(h.date)}</div></div><span class="pts">+${fmt(h.pts)}</span>`;
                 list.appendChild(d);
             });
         };
         window.closeProfile = () => window.showMainMenu();
-        window.clearData = () => {
-            if(confirm(t('msg_clear_confirm'))) {
-                localStorage.clear(); location.reload();
+        window.clearData = async () => {
+            if (await tgConfirm(t('msg_clear_confirm'))) {
+                ['geo_history', 'geo_total_games', 'geo_total_score'].forEach(k => localStorage.removeItem(k));
+                location.reload();
             }
         };
 
-        function formatDist(m) { return m < 1000 ? Math.round(m) + " m" : (m/1000).toFixed(1) + " km"; }
         window.shareResult = () => {
-            const msg = t('msg_share_text').replace('{s}', STATE.score);
-            const url = `https://t.me/share/url?url=${encodeURIComponent("t.me/geogur_bot/app")}&text=${encodeURIComponent(msg)}`;
-            if(window.Telegram?.WebApp) window.Telegram.WebApp.openTelegramLink(url);
-            else window.open(url, '_blank');
+            const msg = t('msg_share_text').replace('{s}', fmt(STATE.score));
+            const url = `https://t.me/share/url?url=${encodeURIComponent(BOT_APP_LINK)}&text=${encodeURIComponent(msg)}`;
+            if (TG && tgv('6.1')) TG.openTelegramLink(url); else window.open(url, '_blank');
         };
 
         init();
     </script>
 </body>
+</html>
