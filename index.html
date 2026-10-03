@@ -1310,8 +1310,7 @@
         const TARGET_PRELOAD_COUNT = 20;
         let currentPreloadCountry = null;
 
-        // Try to fetch a valid location. Returns NULL if not found immediately (no retries here).
-        // BBOX is ~0.05 (~5.5km) to ensure a very high hit rate.
+        // Find a street-view image near a random city. Returns NULL if none found (no retries here).
         async function fetchValidLocation(countryCode) {
             let pool = LOCATIONS;
             if (countryCode && COUNTRY_POOLS[countryCode]) pool = COUNTRY_POOLS[countryCode].cities;
@@ -1319,35 +1318,84 @@
             const city = pool[Math.floor(Math.random() * pool.length)];
             const rLat = city.lat + (Math.random() * 0.08 - 0.04);
             const rLng = city.lng + (Math.random() * 0.08 - 0.04);
-            // Mapillary rejects heavy queries with HTTP 500, so keep the box small (~2 km)
-            // and filter panoramas ourselves instead of using the server-side is_pano filter.
-            const d = 0.01;
-            const bbox = [rLng - d, rLat - d, rLng + d, rLat + d].map(n => n.toFixed(5)).join(',');
 
-            try {
-                const res = await fetch(`https://graph.mapillary.com/images?access_token=${encodeURIComponent(MLY_TOKEN)}&fields=id,geometry,is_pano&bbox=${bbox}&limit=50`);
-                if (!res.ok) {
-                    if (!fetchValidLocation.warned) {
-                        fetchValidLocation.warned = true;
-                        console.warn('Mapillary API error', res.status, await res.text().catch(() => ''));
-                    }
-                    return null;
+            // Coverage tiles are the reliable source; the /images search often answers
+            // "Please reduce the amount of data" (HTTP 500), so it is only a fallback.
+            let img = null;
+            try { img = await findImageInTile(rLat, rLng); } catch (e) { warnOnce('Mapillary tile error', e); }
+            if (!img) { try { img = await findImageBySearch(rLat, rLng); } catch (e) { } }
+            if (!img) return null;
+
+            return {
+                id: img.id, lat: img.lat, lng: img.lng,
+                city: {
+                    name: countryCode ? COUNTRY_POOLS[countryCode].name : city.name,
+                    flag: countryCode ? COUNTRY_POOLS[countryCode].flag : (city.flag || "")
                 }
-                const data = await res.json();
-                if (data.data && data.data.length > 0) {
-                    const panos = data.data.filter(img => img.is_pano);
-                    const pick = (panos.length ? panos : data.data)[Math.floor(Math.random() * (panos.length || data.data.length))];
-                    const cityName = countryCode ? COUNTRY_POOLS[countryCode].name : city.name;
-                    const cityFlag = countryCode ? COUNTRY_POOLS[countryCode].flag : (city.flag || "");
-                    return {
-                        id: pick.id,
-                        lat: pick.geometry.coordinates[1],
-                        lng: pick.geometry.coordinates[0],
-                        city: { name: cityName, flag: cityFlag }
-                    };
-                }
-            } catch (e) { }
-            return null;
+            };
+        }
+
+        const warned = new Set();
+        function warnOnce(label, detail) {
+            if (warned.has(label)) return;
+            warned.add(label);
+            console.warn(label, detail);
+        }
+
+        let mvtLibs = null;
+        function loadMvt() {
+            mvtLibs = mvtLibs || Promise.all([
+                import('https://cdn.jsdelivr.net/npm/@mapbox/vector-tile@2.0.5/+esm'),
+                import('https://cdn.jsdelivr.net/npm/pbf@4.0.2/+esm')
+            ]).then(([vt, pbf]) => ({ VectorTile: vt.VectorTile, Pbf: pbf.default }))
+              .catch(e => { mvtLibs = null; throw e; });
+            return mvtLibs;
+        }
+
+        function lngLatToTile(lng, lat, z) {
+            const n = 2 ** z;
+            const r = lat * Math.PI / 180;
+            return {
+                x: Math.floor((lng + 180) / 360 * n),
+                y: Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n)
+            };
+        }
+
+        // Picks a random image (preferring 360° panoramas) from the z14 coverage tile around a point.
+        async function findImageInTile(lat, lng) {
+            const { VectorTile, Pbf } = await loadMvt();
+            const z = 14;
+            const { x, y } = lngLatToTile(lng, lat, z);
+            const res = await fetch(`https://tiles.mapillary.com/maps/vtp/mly1_public/2/${z}/${x}/${y}?access_token=${encodeURIComponent(MLY_TOKEN)}`);
+            if (!res.ok) { warnOnce('Mapillary tile HTTP ' + res.status, await res.text().catch(() => '')); return null; }
+            const buf = new Uint8Array(await res.arrayBuffer());
+            if (!buf.length) return null;
+            const layer = new VectorTile(new Pbf(buf)).layers.image;
+            if (!layer || !layer.length) return null;
+
+            const panos = [], others = [];
+            for (let i = 0; i < layer.length; i++) {
+                const f = layer.feature(i);
+                (f.properties.is_pano ? panos : others).push(f);
+            }
+            const list = panos.length ? panos : others;
+            const f = list[Math.floor(Math.random() * list.length)];
+            const [fLng, fLat] = f.toGeoJSON(x, y, z).geometry.coordinates;
+            const id = f.properties.id ?? f.id;
+            return id == null ? null : { id: String(id), lat: fLat, lng: fLng };
+        }
+
+        async function findImageBySearch(lat, lng) {
+            const d = 0.003; // ~300 m; larger boxes get rejected in busy areas
+            const bbox = [lng - d, lat - d, lng + d, lat + d].map(n => n.toFixed(5)).join(',');
+            const res = await fetch(`https://graph.mapillary.com/images?access_token=${encodeURIComponent(MLY_TOKEN)}&fields=id,geometry,is_pano&bbox=${bbox}&limit=20`);
+            if (!res.ok) { warnOnce('Mapillary search HTTP ' + res.status, await res.text().catch(() => '')); return null; }
+            const data = await res.json();
+            if (!data.data || !data.data.length) return null;
+            const panos = data.data.filter(img => img.is_pano);
+            const list = panos.length ? panos : data.data;
+            const pick = list[Math.floor(Math.random() * list.length)];
+            return { id: pick.id, lat: pick.geometry.coordinates[1], lng: pick.geometry.coordinates[0] };
         }
 
         async function runWorker() {
