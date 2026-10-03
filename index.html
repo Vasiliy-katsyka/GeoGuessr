@@ -270,6 +270,9 @@
         }
         body.game-active #mb-fallback { background: transparent; pointer-events: none; }
         body.game-active #mb-fallback button { pointer-events: auto; box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
+        body.mb-compact #mb-fallback { left: auto; right: 16px; bottom: calc(var(--safe-bottom) + 20px); padding: 0; }
+        body.mb-compact #mb-fallback button { width: auto; height: 48px; padding: 0 20px; border-radius: 24px; font-size: 16px; }
+        body.mb-compact { --mb-space: 0px; }
         #mb-fallback button:disabled { opacity: 0.45; cursor: default; }
         .spinner { width: 20px; height: 20px; border-radius: 50%; border: 2.5px solid currentColor; border-right-color: transparent; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -1276,8 +1279,10 @@
         // During a game (and in a regular browser) an in-page button is used instead, so the
         // Guess / Confirm / Next buttons are always on screen no matter the Telegram client.
         let mainAction = null;
-        function setMain(opts) {
+        function setMain(opts, compact = false) {
             mainAction = opts && opts.active !== false ? opts.onClick : null;
+            // Compact = small corner button, so it doesn't cover the street-view arrows.
+            document.body.classList.toggle('mb-compact', !!opts && compact);
             const native = IN_TG && STATE.screen !== 'game';
             if (IN_TG && !native) { TG.MainButton.hideProgress(); TG.MainButton.hide(); }
             if (native) {
@@ -1362,7 +1367,7 @@
             };
         }
 
-        // Picks a random image (preferring 360° panoramas) from the z14 coverage tile around a point.
+        // Picks a random 360° panorama from the z14 coverage tile around a point.
         async function findImageInTile(lat, lng) {
             const { VectorTile, Pbf } = await loadMvt();
             const z = 14;
@@ -1374,13 +1379,14 @@
             const layer = new VectorTile(new Pbf(buf)).layers.image;
             if (!layer || !layer.length) return null;
 
-            const panos = [], others = [];
+            // 360° panoramas only; if this tile has none, the caller tries another spot.
+            const panos = [];
             for (let i = 0; i < layer.length; i++) {
                 const f = layer.feature(i);
-                (f.properties.is_pano ? panos : others).push(f);
+                if (f.properties.is_pano) panos.push(f);
             }
-            const list = panos.length ? panos : others;
-            const f = list[Math.floor(Math.random() * list.length)];
+            if (!panos.length) return null;
+            const f = panos[Math.floor(Math.random() * panos.length)];
             const [fLng, fLat] = f.toGeoJSON(x, y, z).geometry.coordinates;
             const id = f.properties.id ?? f.id;
             return id == null ? null : { id: String(id), lat: fLat, lng: fLng };
@@ -1389,13 +1395,11 @@
         async function findImageBySearch(lat, lng) {
             const d = 0.003; // ~300 m; larger boxes get rejected in busy areas
             const bbox = [lng - d, lat - d, lng + d, lat + d].map(n => n.toFixed(5)).join(',');
-            const res = await fetch(`https://graph.mapillary.com/images?access_token=${encodeURIComponent(MLY_TOKEN)}&fields=id,geometry,is_pano&bbox=${bbox}&limit=20`);
+            const res = await fetch(`https://graph.mapillary.com/images?access_token=${encodeURIComponent(MLY_TOKEN)}&fields=id,geometry&is_pano=true&bbox=${bbox}&limit=10`);
             if (!res.ok) { warnOnce('Mapillary search HTTP ' + res.status, await res.text().catch(() => '')); return null; }
             const data = await res.json();
             if (!data.data || !data.data.length) return null;
-            const panos = data.data.filter(img => img.is_pano);
-            const list = panos.length ? panos : data.data;
-            const pick = list[Math.floor(Math.random() * list.length)];
+            const pick = data.data[Math.floor(Math.random() * data.data.length)];
             return { id: pick.id, lat: pick.geometry.coordinates[1], lng: pick.geometry.coordinates[0] };
         }
 
@@ -1649,7 +1653,7 @@
                 if (guessMarker) setMain({ text: t('btn_confirm'), onClick: () => window.submitGuess() });
                 else setMain({ text: t('btn_guess_tap'), active: false });
             } else {
-                setMain({ text: '📍  ' + t('btn_make_guess'), onClick: window.openMap });
+                setMain({ text: '📍  ' + t('btn_make_guess'), onClick: window.openMap }, true);
             }
         }
 
