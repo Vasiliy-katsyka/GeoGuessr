@@ -308,8 +308,8 @@
             --glass-rim: rgba(255, 255, 255, 0.95);
             --glass-rim-dim: rgba(255, 255, 255, 0.25);
             --glass-shadow: 0 10px 30px rgba(30, 41, 90, 0.14), 0 1px 2px rgba(30, 41, 90, 0.08);
-            --ambient-op: 0.6;
-            --grid-line: rgba(30, 41, 90, 0.09);
+            --map-filter: saturate(0.55) brightness(1.04);
+            --map-veil: linear-gradient(180deg, rgba(242,242,247,0.55), rgba(242,242,247,0.25) 45%, rgba(242,242,247,0.45));
         }
         html[data-scheme="dark"] {
             --glass-bg: rgba(40, 40, 46, 0.24);
@@ -318,25 +318,21 @@
             --glass-rim: rgba(255, 255, 255, 0.55);
             --glass-rim-dim: rgba(255, 255, 255, 0.08);
             --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
-            --ambient-op: 0.55;
-            --grid-line: rgba(255, 255, 255, 0.06);
+            --map-filter: invert(1) hue-rotate(180deg) saturate(0.45) brightness(0.8) contrast(0.95);
+            --map-veil: linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0.25) 45%, rgba(0,0,0,0.5));
         }
 
-        /* Colorful backdrop behind the menus so the glass has something to bend */
+        /* A quiet world map behind the menus, so the glass has real detail to bend */
         #ambient { position: fixed; inset: 0; z-index: 4990; background: var(--bg); overflow: hidden; pointer-events: none; }
         body.game-active #ambient { display: none; }
-        #ambient .blob { position: absolute; border-radius: 50%; opacity: var(--ambient-op); animation: drift 22s ease-in-out infinite alternate; }
-        #ambient .b1 { width: 70vmax; height: 70vmax; left: -25vmax; top: -20vmax; background: radial-gradient(circle, #3b82f6 0%, rgba(59,130,246,0) 65%); }
-        #ambient .b2 { width: 60vmax; height: 60vmax; right: -25vmax; top: 10vh; background: radial-gradient(circle, #a855f7 0%, rgba(168,85,247,0) 65%); animation-delay: -6s; }
-        #ambient .b3 { width: 65vmax; height: 65vmax; left: -20vmax; bottom: -30vmax; background: radial-gradient(circle, #14b8a6 0%, rgba(20,184,166,0) 65%); animation-delay: -12s; }
-        #ambient .b4 { width: 45vmax; height: 45vmax; right: -15vmax; bottom: -10vmax; background: radial-gradient(circle, #f59e0b 0%, rgba(245,158,11,0) 65%); animation-delay: -3s; }
-        #ambient .grid {
-            position: absolute; inset: 0;
-            background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-            background-size: 32px 32px;
+        #ambient-map {
+            position: absolute; left: -15%; top: -15%; width: 130%; height: 130%;
+            background: var(--bg); animation: mapdrift 60s ease-in-out infinite alternate;
         }
-        @keyframes drift { to { transform: translate(6vmax, 4vmax) scale(1.08); } }
-        @media (prefers-reduced-motion: reduce) { #ambient .blob { animation: none; } }
+        #ambient-map .leaflet-tile-pane { filter: var(--map-filter); }
+        #ambient-veil { position: absolute; inset: 0; background: var(--map-veil); }
+        @keyframes mapdrift { from { transform: translate(-3%, -2%); } to { transform: translate(3%, 2%); } }
+        @media (prefers-reduced-motion: reduce) { #ambient-map { animation: none; } }
 
         .screen { background: transparent; }
         .section { border-radius: 20px; }
@@ -396,7 +392,7 @@
 <body>
 
     <!-- Liquid glass: backdrop for the menus + per-element refraction filters (built in JS) -->
-    <div id="ambient"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="blob b4"></div><div class="grid"></div></div>
+    <div id="ambient"><div id="ambient-map"></div><div id="ambient-veil"></div></div>
     <svg id="lg-defs" width="0" height="0" style="position:absolute" aria-hidden="true"><defs></defs></svg>
 
     <div id="mly"></div>
@@ -1743,12 +1739,25 @@
                 if (lgObserver) lgObserver.observe(node);
             });
         }
+        // Non-interactive world map behind the menus, starting somewhere different each time
+        function initAmbientMap() {
+            const spots = [[48.86, 2.35, 5], [35.68, 139.69, 5], [40.71, -74.0, 5], [-33.87, 151.21, 5], [55.75, 37.62, 5],
+                           [41.9, 12.5, 5], [-22.9, -43.2, 5], [25.2, 55.27, 6], [59.33, 18.07, 5], [37.77, -122.42, 6]];
+            const [lat, lng, z] = spots[Math.floor(Math.random() * spots.length)];
+            const bg = L.map('ambient-map', {
+                zoomControl: false, attributionControl: false, dragging: false, touchZoom: false, scrollWheelZoom: false,
+                doubleClickZoom: false, boxZoom: false, keyboard: false, tap: false, inertia: false
+            }).setView([lat, lng], z);
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(bg);
+        }
+
         function initGlass() {
             applyScheme();
             if (TG?.onEvent) TG.onEvent('themeChanged', applyScheme);
             matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyScheme);
             if (LG_REFRACT) document.documentElement.classList.add('lg-refract');
             glassify();
+            initAmbientMap();
         }
 
         // ==================== INIT ====================
