@@ -241,6 +241,7 @@
         }
         #result-sheet.show { transform: translateY(0); }
         .res-score { display: flex; align-items: baseline; justify-content: center; gap: 6px; margin: 8px 0 10px; }
+        .res-score #res-pts { color: var(--text); }
         #res-pts { font-size: 44px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
         .res-score span { color: var(--hint); font-size: 17px; }
         #result-sheet .bar { margin: 0 4px 14px; }
@@ -297,11 +298,106 @@
         }
         #toast.show { opacity: 1; transform: none; }
 
+        /* ==================== LIQUID GLASS ====================
+           Frosted, tinted glass with a specular rim everywhere; on Chromium (Android / desktop Telegram)
+           each panel also gets an SVG displacement filter that refracts what is behind its edges. */
+        html[data-scheme="light"] {
+            --glass-bg: rgba(255, 255, 255, 0.22);
+            --glass-strong: rgba(255, 255, 255, 0.72);
+            --glass-inner: rgba(255, 255, 255, 0.45);
+            --glass-rim: rgba(255, 255, 255, 0.95);
+            --glass-rim-dim: rgba(255, 255, 255, 0.25);
+            --glass-shadow: 0 10px 30px rgba(30, 41, 90, 0.14), 0 1px 2px rgba(30, 41, 90, 0.08);
+            --ambient-op: 0.6;
+            --grid-line: rgba(30, 41, 90, 0.09);
+        }
+        html[data-scheme="dark"] {
+            --glass-bg: rgba(40, 40, 46, 0.24);
+            --glass-strong: rgba(20, 20, 24, 0.8);
+            --glass-inner: rgba(255, 255, 255, 0.07);
+            --glass-rim: rgba(255, 255, 255, 0.55);
+            --glass-rim-dim: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+            --ambient-op: 0.55;
+            --grid-line: rgba(255, 255, 255, 0.06);
+        }
+
+        /* Colorful backdrop behind the menus so the glass has something to bend */
+        #ambient { position: fixed; inset: 0; z-index: 4990; background: var(--bg); overflow: hidden; pointer-events: none; }
+        body.game-active #ambient { display: none; }
+        #ambient .blob { position: absolute; border-radius: 50%; opacity: var(--ambient-op); animation: drift 22s ease-in-out infinite alternate; }
+        #ambient .b1 { width: 70vmax; height: 70vmax; left: -25vmax; top: -20vmax; background: radial-gradient(circle, #3b82f6 0%, rgba(59,130,246,0) 65%); }
+        #ambient .b2 { width: 60vmax; height: 60vmax; right: -25vmax; top: 10vh; background: radial-gradient(circle, #a855f7 0%, rgba(168,85,247,0) 65%); animation-delay: -6s; }
+        #ambient .b3 { width: 65vmax; height: 65vmax; left: -20vmax; bottom: -30vmax; background: radial-gradient(circle, #14b8a6 0%, rgba(20,184,166,0) 65%); animation-delay: -12s; }
+        #ambient .b4 { width: 45vmax; height: 45vmax; right: -15vmax; bottom: -10vmax; background: radial-gradient(circle, #f59e0b 0%, rgba(245,158,11,0) 65%); animation-delay: -3s; }
+        #ambient .grid {
+            position: absolute; inset: 0;
+            background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+            background-size: 32px 32px;
+        }
+        @keyframes drift { to { transform: translate(6vmax, 4vmax) scale(1.08); } }
+        @media (prefers-reduced-motion: reduce) { #ambient .blob { animation: none; } }
+
+        .screen { background: transparent; }
+        .section { border-radius: 20px; }
+        .segmented { border-radius: 14px; padding: 3px; }
+        .segmented button { border-radius: 11px; }
+        .segmented button.active { background: var(--glass-strong); box-shadow: 0 2px 8px rgba(0,0,0,0.12), inset 0 0.5px 0 var(--glass-rim); }
+        .search { border-radius: 14px; height: 42px; }
+
+        .lg {
+            background: var(--glass-bg) !important;
+            -webkit-backdrop-filter: blur(18px) saturate(180%);
+            backdrop-filter: blur(18px) saturate(180%);
+            box-shadow: var(--glass-shadow);
+        }
+        .section.lg, .segmented.lg, .search.lg, .pill.lg, .icon-btn.lg, #mb-fallback button.lg { position: relative; }
+        /* Chromium tears an SVG backdrop filter when the element also has an outer box-shadow */
+        html.lg-refract .lg { box-shadow: none !important; }
+        /* Specular rim: bright top-left and bottom-right edges, like light catching a curved glass edge */
+        .lg::after {
+            content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.2px; pointer-events: none; z-index: 2;
+            background: linear-gradient(135deg, var(--glass-rim) 0%, var(--glass-rim-dim) 28%, transparent 50%, var(--glass-rim-dim) 72%, var(--glass-rim) 100%);
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+        }
+        /* Soft inner sheen across the top */
+        .lg::before {
+            content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 1;
+            background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0) 50%);
+        }
+        .row + .row::before { z-index: 3; }
+        button.lg:active, .lg button.row:active { transform: scale(0.985); }
+        button.row:active { background: rgba(127, 127, 127, 0.12); }
+
+        #map-sheet.lg, #result-sheet.lg, .share-sheet.lg { background: var(--glass-strong) !important; border-radius: 28px 28px 0 0; }
+        #map-sheet.result-mode.lg { background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none; border-radius: 0; }
+        #map-sheet.result-mode.lg::after, #map-sheet.result-mode.lg::before { display: none; }
+        #map { border-radius: 20px 20px 0 0; }
+        .lg > * { position: relative; z-index: 3; }
+        #result-sheet .section, .share-sheet .section { background: var(--glass-inner); }
+        #share-modal { background: rgba(0, 0, 0, 0.35); }
+
+        /* Over street view the glass is always smoky with white text */
+        #hud .pill.lg { background: rgba(0, 0, 0, 0.24) !important; color: #fff; }
+        #hud .pill.lg::after { background: linear-gradient(135deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.1) 30%, transparent 50%, rgba(255,255,255,0.1) 70%, rgba(255,255,255,0.5) 100%); }
+        #host-controls .pill.lg { background: rgba(255, 59, 48, 0.55) !important; }
+        #timer-box.warn.lg { background: rgba(255, 59, 48, 0.6) !important; }
+        #mb-fallback button.lg { background: rgba(36, 129, 204, 0.72) !important; background: color-mix(in srgb, var(--accent) 72%, transparent) !important; color: var(--accent-text); }
+        body:not(.game-active) #mb-fallback { background: transparent; }
+        #toast.lg { background: rgba(20, 20, 24, 0.55) !important; }
+        .sheet-head .icon-btn.lg { background: var(--glass-inner) !important; }
+
         .fade-in { animation: fadeIn 0.2s ease; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
+
+    <!-- Liquid glass: backdrop for the menus + per-element refraction filters (built in JS) -->
+    <div id="ambient"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="blob b4"></div><div class="grid"></div></div>
+    <svg id="lg-defs" width="0" height="0" style="position:absolute" aria-hidden="true"><defs></defs></svg>
 
     <div id="mly"></div>
 
@@ -1541,8 +1637,123 @@
             return Promise.any(tries);
         }
 
+        // ==================== LIQUID GLASS ====================
+        // Every glass panel gets frosted glass + a specular rim (CSS). Where the engine supports SVG
+        // filters in backdrop-filter (Chromium: Android & desktop Telegram) each panel also gets its own
+        // displacement map, sized to the element, that bends the backdrop near the rounded edges and
+        // splits R/G/B slightly — the "lensing" of real glass. iOS WebKit keeps the frosted version.
+        const LG_SELECTOR = '.screen .section, .segmented, .search, #hud .pill, #map-sheet, #result-sheet, .share-sheet, #mb-fallback button, #toast, .sheet-head .icon-btn';
+        const UA = navigator.userAgent;
+        const LG_REFRACT = /Chrome\/\d+/.test(UA) && !/iPhone|iPad|iPod|CriOS|FxiOS/.test(UA);
+        const SVGNS = 'http://www.w3.org/2000/svg';
+        let lgSeq = 0;
+
+        function applyScheme() {
+            const dark = TG?.colorScheme ? TG.colorScheme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+            document.documentElement.dataset.scheme = dark ? 'dark' : 'light';
+        }
+
+        // Displacement map for a rounded rectangle: pixels within `band` of the edge push the sample
+        // inward along the edge normal (stronger closer to the rim), everything else stays put.
+        function glassMap(W, H, radius, band) {
+            const k = Math.min(1, 160 / Math.max(W, H));
+            const w = Math.max(8, Math.round(W * k)), h = Math.max(8, Math.round(H * k));
+            const cv = document.createElement('canvas');
+            cv.width = w; cv.height = h;
+            const c = cv.getContext('2d');
+            const img = c.createImageData(w, h);
+            const hx = W / 2, hy = H / 2, rad = Math.min(radius, hx, hy);
+            for (let j = 0; j < h; j++) {
+                for (let i = 0; i < w; i++) {
+                    const px = (i + 0.5) / k - hx, py = (j + 0.5) / k - hy;
+                    const qx = Math.abs(px) - (hx - rad), qy = Math.abs(py) - (hy - rad);
+                    let nx, ny, sdf;
+                    if (qx > 0 && qy > 0) {
+                        const len = Math.hypot(qx, qy) || 1;
+                        sdf = len - rad; nx = qx / len * Math.sign(px); ny = qy / len * Math.sign(py);
+                    } else if (qx > qy) { sdf = qx - rad; nx = Math.sign(px); ny = 0; }
+                    else { sdf = qy - rad; nx = 0; ny = Math.sign(py); }
+                    const d = -sdf;                              // distance inside the edge
+                    const s = d >= band ? 0 : Math.pow(1 - Math.max(0, d) / band, 2);
+                    const o = (j * w + i) * 4;
+                    img.data[o] = 128 - nx * s * 127;
+                    img.data[o + 1] = 128 - ny * s * 127;
+                    img.data[o + 2] = 128;
+                    img.data[o + 3] = 255;
+                }
+            }
+            c.putImageData(img, 0, 0);
+            return cv.toDataURL();
+        }
+
+        function el(tag, attrs, parent) {
+            const n = document.createElementNS(SVGNS, tag);
+            for (const k in attrs) n.setAttribute(k, attrs[k]);
+            if (parent) parent.appendChild(n);
+            return n;
+        }
+
+        function buildGlass(node) {
+            const W = node.offsetWidth, H = node.offsetHeight;
+            if (!W || !H) return;
+            const rawRadius = getComputedStyle(node).borderTopLeftRadius;
+            const radius = rawRadius.endsWith('%') ? Math.min(W, H) * parseFloat(rawRadius) / 100 : (parseFloat(rawRadius) || 0);
+            // Chromium sizes backdrop-filter regions/feImage in device pixels (displacement scale stays in CSS px)
+            const dpr = window.devicePixelRatio || 1;
+            const key = `${W}x${H}r${radius}d${dpr}`;
+            if (node.dataset.lgKey === key) return;
+            node.dataset.lgKey = key;
+
+            // Always a fresh id: Chromium keeps rendering a cached filter if one is replaced under the same id
+            const prev = node.dataset.lgId;
+            const id = node.dataset.lgId = 'lg' + (++lgSeq);
+            const band = Math.max(10, Math.min(34, Math.min(W, H) * 0.32));
+            const scale = band * 1.4;
+            const defs = $('lg-defs').querySelector('defs');
+
+            const f = el('filter', { id, x: 0, y: 0, width: W * dpr, height: H * dpr, filterUnits: 'userSpaceOnUse', 'color-interpolation-filters': 'sRGB' }, defs);
+            el('feImage', { href: glassMap(W, H, radius, band), x: 0, y: 0, width: W * dpr, height: H * dpr, preserveAspectRatio: 'none', result: 'map' }, f);
+            // No blur in the refracting version: Chromium tears the backdrop when blur is combined with
+            // an SVG backdrop filter (CSS blur() after url() or feGaussianBlur inside it). Clear glass
+            // with bending edges is also closer to iOS Liquid Glass; the tint keeps text readable.
+            // Slightly different bend per channel = subtle chromatic aberration at the rim
+            [['r', 1, '1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0'],
+             ['g', 0.93, '0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0'],
+             ['b', 0.86, '0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0']].forEach(([ch, mul, m]) => {
+                el('feDisplacementMap', { in: 'SourceGraphic', in2: 'map', scale: scale * mul, xChannelSelector: 'R', yChannelSelector: 'G', result: 'd' + ch }, f);
+                el('feColorMatrix', { in: 'd' + ch, type: 'matrix', values: m, result: 'c' + ch }, f);
+            });
+            el('feBlend', { in: 'cr', in2: 'cg', mode: 'screen', result: 'rg' }, f);
+            el('feBlend', { in: 'rg', in2: 'cb', mode: 'screen', result: 'bent' }, f);
+            el('feColorMatrix', { in: 'bent', type: 'saturate', values: 1.7, result: 'sat' }, f);
+            const ct = el('feComponentTransfer', { in: 'sat' }, f);
+            ['R', 'G', 'B'].forEach(c => el('feFunc' + c, { type: 'linear', slope: 1.05 }, ct));
+
+            const value = `url(#${id})`;
+            node.style.setProperty('backdrop-filter', value, 'important');
+            node.style.setProperty('-webkit-backdrop-filter', value, 'important');
+            if (prev) requestAnimationFrame(() => document.getElementById(prev)?.remove());
+        }
+
+        const lgObserver = LG_REFRACT ? new ResizeObserver(entries => entries.forEach(e => buildGlass(e.target))) : null;
+        function glassify(root = document) {
+            root.querySelectorAll(LG_SELECTOR).forEach(node => {
+                if (node.classList.contains('lg')) return;
+                node.classList.add('lg');
+                if (lgObserver) lgObserver.observe(node);
+            });
+        }
+        function initGlass() {
+            applyScheme();
+            if (TG?.onEvent) TG.onEvent('themeChanged', applyScheme);
+            matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyScheme);
+            if (LG_REFRACT) document.documentElement.classList.add('lg-refract');
+            glassify();
+        }
+
         // ==================== INIT ====================
         function init() {
+            initGlass();
             map = L.map('map', { zoomControl: false, worldCopyJump: true }).setView([20, 0], 2);
             L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
             $('map-sheet').addEventListener('transitionend', () => map.invalidateSize());
