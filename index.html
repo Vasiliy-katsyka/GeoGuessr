@@ -103,6 +103,7 @@
             content: ""; position: absolute; top: 0; right: 0; left: var(--sep-left);
             height: 1px; transform: scaleY(0.5); transform-origin: top; background: var(--sep);
         }
+        .row.hidden + .row::before { display: none; }
         button.row:active, .row.tap:active { background: var(--press); }
         .row-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; }
         .row-body { flex: 1; min-width: 0; }
@@ -277,6 +278,16 @@
         .spinner { width: 20px; height: 20px; border-radius: 50%; border: 2.5px solid currentColor; border-right-color: transparent; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
+        #share-modal {
+            position: fixed; inset: 0; z-index: 9700; background: rgba(0,0,0,0.5);
+            display: flex; align-items: flex-end; justify-content: center; animation: fadeIn 0.2s ease;
+        }
+        .share-sheet {
+            width: 100%; max-width: 520px; background: var(--bg); border-radius: 14px 14px 0 0;
+            padding: 6px 16px calc(var(--safe-bottom) + 14px); max-height: 100%; overflow-y: auto;
+        }
+        #share-img { display: block; height: 52vh; height: 52dvh; max-width: 100%; margin: 6px auto 10px; border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); object-fit: contain; -webkit-touch-callout: default; }
+        .share-hint { text-align: center; font-size: 13px; color: var(--hint); margin-bottom: 10px; }
         #toast {
             position: fixed; left: 16px; right: 16px; top: calc(var(--safe-top) + 12px); z-index: 9900;
             max-width: 480px; margin: 0 auto; padding: 12px 16px; border-radius: 12px;
@@ -464,6 +475,15 @@
                 <div class="bar"><div id="pf-level-bar"></div></div>
             </div>
 
+            <div class="section icons" style="margin-top:12px;">
+                <button class="row link" onclick="window.shareProfile()">
+                    <div class="row-icon" style="background:linear-gradient(135deg,#7c3aed,#db2777);">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>
+                    </div>
+                    <div class="row-body"><div class="row-title" data-i18n="btn_share_profile">Share profile card</div></div>
+                </button>
+            </div>
+
             <div class="section-header" data-i18n="lbl_stats">Statistics</div>
             <div class="section">
                 <div class="row"><div class="row-body" data-i18n="lbl_games">Rounds played</div><span class="row-value" id="pf-total-games">0</span></div>
@@ -551,6 +571,23 @@
     </div>
 
     <div id="mb-fallback" class="hidden"><button id="mb-fallback-btn"></button></div>
+    <!-- ==================== SHARE SHEET ==================== -->
+    <div id="share-modal" class="hidden" onclick="if (event.target === this) window.closeShareSheet()">
+        <div class="share-sheet">
+            <div class="grabber"></div>
+            <img id="share-img" alt="">
+            <div class="share-hint" id="share-hint" data-i18n="share_hint">Tip: long-press the image to save it</div>
+            <div class="section">
+                <button class="row link" id="share-native" style="justify-content:center;" onclick="window.shareImageNative()" data-i18n="btn_share_image">Share image</button>
+                <button class="row link" style="justify-content:center;" onclick="window.saveShareImage()" data-i18n="btn_save_image">Save image</button>
+                <button class="row link" style="justify-content:center;" onclick="window.sendShareLink()" data-i18n="btn_send_link">Send to a Telegram chat</button>
+            </div>
+            <div class="section" style="margin-top:10px;">
+                <button class="row" style="justify-content:center; font-weight:600;" onclick="window.closeShareSheet()" data-i18n="btn_close">Close</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toast"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -1168,7 +1205,31 @@
             lbl_rounds: "Rounds",
             lbl_level_xp: "Level {l} · {x} XP",
             btn_play_in: "Play {c}",
-            msg_no_locations: "Couldn't load street view right now. Please try again in a moment."
+            msg_no_locations: "Couldn't load street view right now. Please try again in a moment.",
+            btn_share_profile: "Share profile card",
+            btn_share_image: "Share image",
+            btn_save_image: "Save image",
+            btn_send_link: "Send to a Telegram chat",
+            btn_close: "Close",
+            share_hint: "Tip: long-press the image to save or forward it",
+            msg_share_profile: "I'm level {l} in GeoGuessr with {x} XP! 🌍 Think you can catch up?",
+            card_scored: "{n} scored",
+            card_of: "out of {m} points",
+            card_accuracy: "accuracy",
+            card_rounds: "Rounds",
+            card_more: "+{n} earlier",
+            card_avg: "Avg / round",
+            card_best: "Best round",
+            card_closest: "Closest guess",
+            card_cta: "Can you beat my score?",
+            card_cta_profile: "Think you know the world?",
+            card_play: "Play in Telegram",
+            card_profile: "Player card",
+            card_level: "Level {l}",
+            card_next: "{x} XP to next level",
+            card_rounds_played: "Rounds played",
+            card_recent: "Last 20 rounds",
+            card_countries: "Countries explored"
         });
         Object.assign(TR.ru, {
             app_subtitle: "Угадай, где ты на карте мира",
@@ -1209,7 +1270,31 @@
             lbl_rounds: "Раунды",
             lbl_level_xp: "Уровень {l} · {x} XP",
             btn_play_in: "Играть: {c}",
-            msg_no_locations: "Не удалось загрузить панораму. Попробуй ещё раз чуть позже."
+            msg_no_locations: "Не удалось загрузить панораму. Попробуй ещё раз чуть позже.",
+            btn_share_profile: "Поделиться карточкой",
+            btn_share_image: "Поделиться картинкой",
+            btn_save_image: "Сохранить картинку",
+            btn_send_link: "Отправить в чат Telegram",
+            btn_close: "Закрыть",
+            share_hint: "Совет: зажми картинку, чтобы сохранить или переслать",
+            msg_share_profile: "У меня {l} уровень в ГеоГессср и {x} XP! 🌍 Догонишь?",
+            card_scored: "{n} набрал",
+            card_of: "из {m} очков",
+            card_accuracy: "точность",
+            card_rounds: "Раунды",
+            card_more: "ещё {n} раньше",
+            card_avg: "В среднем",
+            card_best: "Лучший раунд",
+            card_closest: "Ближе всего",
+            card_cta: "Сможешь лучше?",
+            card_cta_profile: "Думаешь, знаешь мир?",
+            card_play: "Играй в Telegram",
+            card_profile: "Карточка игрока",
+            card_level: "Уровень {l}",
+            card_next: "{x} XP до уровня",
+            card_rounds_played: "Раундов",
+            card_recent: "Последние 20 раундов",
+            card_countries: "Страны"
         });
 
         let map, mly, guessMarker, resultLine, resultMarker, oppMarkers = [];
@@ -1279,7 +1364,9 @@
         // During a game (and in a regular browser) an in-page button is used instead, so the
         // Guess / Confirm / Next buttons are always on screen no matter the Telegram client.
         let mainAction = null;
+        let lastMain = [null, false];
         function setMain(opts, compact = false) {
+            lastMain = [opts, compact];
             mainAction = opts && opts.active !== false ? opts.onClick : null;
             // Compact = small corner button, so it doesn't cover the street-view arrows.
             document.body.classList.toggle('mb-compact', !!opts && compact);
@@ -1524,6 +1611,7 @@
 
         function onBack() {
             haptic('light');
+            if (!$('share-modal').classList.contains('hidden')) { window.closeShareSheet(); return; }
             if (STATE.screen === 'lobby-screen') window.leaveLobby();
             else if (STATE.screen === 'game') {
                 const ms = $('map-sheet');
@@ -1809,6 +1897,7 @@
         };
 
         function fillResultSheet(pts, dist, missed) {
+            STATE.lastRound = { loc: STATE.currentLoc.city?.name || '', flag: STATE.currentLoc.city?.flag || '', pts, dist, missed };
             $('res-pts').textContent = '0';
             animateNumber($('res-pts'), pts);
             $('res-bar').style.width = '0';
@@ -2223,10 +2312,309 @@
             }
         };
 
-        window.shareResult = () => {
-            const msg = t('msg_share_text').replace('{s}', fmt(STATE.score));
-            const url = `https://t.me/share/url?url=${encodeURIComponent(BOT_APP_LINK)}&text=${encodeURIComponent(msg)}`;
+        // ==================== SHARE CARDS ====================
+        // Share images are drawn on a canvas in the browser (1080×1350, Instagram/Telegram-story friendly).
+        const CARD_W = 1080, CARD_H = 1350;
+        const CARD_FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif";
+        const EMOJI_FONT = "'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif";
+        const RANKS = {
+            en: ['Tourist', 'Backpacker', 'Explorer', 'Navigator', 'Cartographer', 'Globetrotter', 'World Legend'],
+            ru: ['Турист', 'Путешественник', 'Исследователь', 'Штурман', 'Картограф', 'Глобтроттер', 'Легенда мира']
+        };
+        function rankTitle(level) { const r = RANKS[STATE.lang]; return r[Math.min(r.length - 1, Math.floor((level - 1) / 3))]; }
+        function ptsColor(p) { return p >= 4000 ? '#34d399' : p >= 2500 ? '#a3e635' : p >= 1000 ? '#fbbf24' : '#fb7185'; }
+
+        function rr(ctx, x, y, w, h, r) {
+            r = Math.min(r, h / 2, w / 2);
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.arcTo(x + w, y, x + w, y + h, r);
+            ctx.arcTo(x + w, y + h, x, y + h, r);
+            ctx.arcTo(x, y + h, x, y, r);
+            ctx.arcTo(x, y, x + w, y, r);
+            ctx.closePath();
+        }
+        function fitText(ctx, text, maxW) {
+            text = String(text);
+            if (ctx.measureText(text).width <= maxW) return text;
+            while (text.length > 1 && ctx.measureText(text + '…').width > maxW) text = text.slice(0, -1);
+            return text + '…';
+        }
+        function txt(ctx, s, x, y, { size = 40, weight = 600, color = '#fff', align = 'left', font = CARD_FONT, maxW } = {}) {
+            ctx.font = `${weight} ${size}px ${font}`;
+            ctx.fillStyle = color;
+            ctx.textAlign = align;
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillText(maxW ? fitText(ctx, s, maxW) : s, x, y);
+        }
+        function emoji(ctx, s, x, y, size, align = 'left') {
+            ctx.font = `${size}px ${EMOJI_FONT}`;
+            ctx.textAlign = align;
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillStyle = '#fff';
+            ctx.fillText(s, x, y);
+        }
+
+        function cardBackground(ctx, c1, c2, c3) {
+            const g = ctx.createLinearGradient(0, 0, CARD_W, CARD_H);
+            g.addColorStop(0, c1); g.addColorStop(0.55, c2); g.addColorStop(1, c3);
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, CARD_W, CARD_H);
+            // Faint globe: meridians and parallels in the top-right corner
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+            ctx.lineWidth = 2;
+            const cx = CARD_W - 120, cy = 170, R = 360;
+            ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+            for (let i = 1; i < 6; i++) { ctx.beginPath(); ctx.ellipse(cx, cy, R * i / 6, R, 0, 0, Math.PI * 2); ctx.stroke(); }
+            for (let i = -2; i <= 2; i++) {
+                const yy = cy + R * i / 3, half = Math.sqrt(Math.max(0, R * R - (yy - cy) ** 2));
+                ctx.beginPath(); ctx.moveTo(cx - half, yy); ctx.lineTo(cx + half, yy); ctx.stroke();
+            }
+            ctx.restore();
+            // Soft glow at the bottom
+            const glow = ctx.createRadialGradient(150, CARD_H, 0, 150, CARD_H, 700);
+            glow.addColorStop(0, 'rgba(255,255,255,0.12)'); glow.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = glow;
+            ctx.fillRect(0, 0, CARD_W, CARD_H);
+        }
+
+        function cardHeader(ctx, right) {
+            emoji(ctx, '🌍', 72, 128, 56);
+            txt(ctx, 'GeoGuessr', 146, 124, { size: 50, weight: 800 });
+            if (right) txt(ctx, right, CARD_W - 72, 122, { size: 34, weight: 600, color: 'rgba(255,255,255,0.75)', align: 'right', maxW: 420 });
+        }
+
+        function qrCanvas(text) {
+            const holder = document.createElement('div');
+            new QRCode(holder, { text, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M });
+            return holder.querySelector('canvas');
+        }
+
+        function cardFooter(ctx, cta) {
+            const y = CARD_H - 230;
+            ctx.fillStyle = 'rgba(255,255,255,0.12)';
+            rr(ctx, 60, y, CARD_W - 120, 170, 36); ctx.fill();
+            const q = qrCanvas(BOT_APP_LINK);
+            if (q) {
+                ctx.fillStyle = '#fff'; rr(ctx, 84, y + 20, 130, 130, 18); ctx.fill();
+                ctx.drawImage(q, 94, y + 30, 110, 110);
+            }
+            txt(ctx, cta, 246, y + 76, { size: 44, weight: 800, maxW: CARD_W - 340 });
+            txt(ctx, t('card_play') + ' · t.me/geogur_bot', 246, y + 126, { size: 32, weight: 500, color: 'rgba(255,255,255,0.75)', maxW: CARD_W - 340 });
+        }
+
+        function gauge(ctx, cx, cy, r, frac, label) {
+            ctx.save();
+            ctx.lineCap = 'round';
+            ctx.lineWidth = 26;
+            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0.75 * Math.PI, 2.25 * Math.PI); ctx.stroke();
+            const g = ctx.createLinearGradient(cx - r, cy, cx + r, cy);
+            g.addColorStop(0, '#fbbf24'); g.addColorStop(1, '#34d399');
+            ctx.strokeStyle = g;
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0.75 * Math.PI, (0.75 + 1.5 * Math.max(0.005, frac)) * Math.PI); ctx.stroke();
+            ctx.restore();
+            txt(ctx, Math.round(frac * 100) + '%', cx, cy + 22, { size: 64, weight: 800, align: 'center' });
+            txt(ctx, label, cx, cy + 66, { size: 26, weight: 600, color: 'rgba(255,255,255,0.7)', align: 'center' });
+        }
+
+        function statTiles(ctx, y, tiles) {
+            const gap = 24, w = (CARD_W - 120 - gap * (tiles.length - 1)) / tiles.length;
+            tiles.forEach((s, i) => {
+                const x = 60 + i * (w + gap);
+                ctx.fillStyle = 'rgba(255,255,255,0.12)';
+                rr(ctx, x, y, w, 150, 30); ctx.fill();
+                txt(ctx, s.value, x + w / 2, y + 78, { size: 48, weight: 800, align: 'center', maxW: w - 30 });
+                txt(ctx, s.label, x + w / 2, y + 120, { size: 26, weight: 600, color: 'rgba(255,255,255,0.7)', align: 'center', maxW: w - 30 });
+            });
+        }
+
+        // Score card for a finished (or ongoing) solo game, or a single party round.
+        function drawScoreCard(rounds, modeLabel) {
+            const cv = document.createElement('canvas');
+            cv.width = CARD_W; cv.height = CARD_H;
+            const ctx = cv.getContext('2d');
+            cardBackground(ctx, '#0f172a', '#1d4ed8', '#7c3aed');
+            cardHeader(ctx, modeLabel);
+
+            const total = rounds.reduce((s, r) => s + r.pts, 0);
+            const max = rounds.length * 5000 || 5000;
+            txt(ctx, t('card_scored').replace('{n}', STATE.myName), 72, 250, { size: 40, weight: 600, color: 'rgba(255,255,255,0.8)', maxW: 600 });
+            txt(ctx, fmt(total), 66, 390, { size: 150, weight: 900, maxW: 640 });
+            txt(ctx, t('card_of').replace('{m}', fmt(max)), 72, 448, { size: 36, weight: 600, color: 'rgba(255,255,255,0.7)' });
+            gauge(ctx, CARD_W - 210, 345, 120, total / max, t('card_accuracy'));
+
+            // Per-round bars
+            const shown = rounds.slice(-6);
+            const top = 520, rowH = 78;
+            txt(ctx, t('card_rounds').toUpperCase(), 72, top, { size: 26, weight: 700, color: 'rgba(255,255,255,0.6)' });
+            if (rounds.length > shown.length) txt(ctx, t('card_more').replace('{n}', rounds.length - shown.length), CARD_W - 72, top, { size: 26, weight: 600, color: 'rgba(255,255,255,0.6)', align: 'right' });
+            shown.forEach((r, i) => {
+                const y = top + 30 + i * rowH;
+                emoji(ctx, r.flag || '📍', 72, y + 48, 42);
+                txt(ctx, r.loc, 136, y + 34, { size: 30, weight: 700, maxW: 420 });
+                txt(ctx, r.missed ? t('lbl_missed') : formatDist(r.dist), 136, y + 66, { size: 24, weight: 500, color: 'rgba(255,255,255,0.65)' });
+                const bx = 580, bw = 300, by = y + 24;
+                ctx.fillStyle = 'rgba(255,255,255,0.15)'; rr(ctx, bx, by, bw, 20, 10); ctx.fill();
+                ctx.fillStyle = ptsColor(r.pts); rr(ctx, bx, by, Math.max(20, bw * r.pts / 5000), 20, 10); ctx.fill();
+                txt(ctx, fmt(r.pts), CARD_W - 72, y + 44, { size: 32, weight: 800, align: 'right' });
+            });
+
+            const listEnd = top + 30 + Math.max(1, shown.length) * rowH;
+            const hits = rounds.filter(r => !r.missed);
+            const closest = hits.length ? Math.min(...hits.map(r => r.dist)) : null;
+            const tilesY = Math.min(Math.max(listEnd + 24, 1000), CARD_H - 420);
+            statTiles(ctx, tilesY, [
+                { value: fmt(total / (rounds.length || 1)), label: t('card_avg') },
+                { value: fmt(Math.max(0, ...rounds.map(r => r.pts))), label: t('card_best') },
+                { value: closest == null ? '—' : formatDist(closest), label: t('card_closest') }
+            ]);
+            cardFooter(ctx, t('card_cta'));
+            return cv;
+        }
+
+        function loadImage(src) {
+            return new Promise((res) => {
+                if (!src) return res(null);
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => res(img);
+                img.onerror = () => res(null);
+                img.src = src;
+                setTimeout(() => res(null), 4000);
+            });
+        }
+
+        async function drawProfileCard() {
+            const cv = document.createElement('canvas');
+            cv.width = CARD_W; cv.height = CARD_H;
+            const ctx = cv.getContext('2d');
+            cardBackground(ctx, '#1e1b4b', '#7c3aed', '#db2777');
+            cardHeader(ctx, t('card_profile'));
+
+            const { level, into } = levelInfo();
+            // Avatar: Telegram photo when the server allows it, otherwise initials
+            const ax = 72, ay = 190, as = 180;
+            const photo = await loadImage(USER.photo_url);
+            ctx.save();
+            ctx.beginPath(); ctx.arc(ax + as / 2, ay + as / 2, as / 2, 0, Math.PI * 2); ctx.clip();
+            if (photo) ctx.drawImage(photo, ax, ay, as, as);
+            else {
+                const g = ctx.createLinearGradient(ax, ay, ax + as, ay + as);
+                g.addColorStop(0, '#72d5fd'); g.addColorStop(1, '#2a9ef1');
+                ctx.fillStyle = g; ctx.fillRect(ax, ay, as, as);
+                txt(ctx, initials(STATE.myName), ax + as / 2, ay + as / 2 + 28, { size: 84, weight: 800, align: 'center' });
+            }
+            ctx.restore();
+            ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+            ctx.beginPath(); ctx.arc(ax + as / 2, ay + as / 2, as / 2, 0, Math.PI * 2); ctx.stroke();
+
+            txt(ctx, STATE.myName, 290, 270, { size: 64, weight: 800, maxW: CARD_W - 360 });
+            const badge = `${t('card_level').replace('{l}', level)} · ${rankTitle(level)}`;
+            ctx.font = `700 32px ${CARD_FONT}`;
+            const bw = ctx.measureText(badge).width + 48;
+            ctx.fillStyle = 'rgba(255,255,255,0.18)'; rr(ctx, 290, 300, bw, 60, 30); ctx.fill();
+            txt(ctx, badge, 314, 342, { size: 32, weight: 700 });
+
+            // XP bar
+            const xy = 440;
+            txt(ctx, `${fmt(STATE.totalScore)} XP`, 72, xy, { size: 34, weight: 800 });
+            txt(ctx, t('card_next').replace('{x}', fmt(XP_PER_LEVEL - into)), CARD_W - 72, xy, { size: 28, weight: 600, color: 'rgba(255,255,255,0.7)', align: 'right' });
+            ctx.fillStyle = 'rgba(255,255,255,0.15)'; rr(ctx, 72, xy + 24, CARD_W - 144, 26, 13); ctx.fill();
+            const xg = ctx.createLinearGradient(72, 0, CARD_W - 72, 0);
+            xg.addColorStop(0, '#fde68a'); xg.addColorStop(1, '#f59e0b');
+            ctx.fillStyle = xg; rr(ctx, 72, xy + 24, Math.max(26, (CARD_W - 144) * into / XP_PER_LEVEL), 26, 13); ctx.fill();
+
+            const best = bestRound();
+            statTiles(ctx, 530, [
+                { value: fmt(STATE.totalGames), label: t('card_rounds_played') },
+                { value: STATE.totalGames ? fmt(STATE.totalScore / STATE.totalGames) : '—', label: t('card_avg') },
+                { value: best ? fmt(best) : '—', label: t('card_best') }
+            ]);
+
+            // Last 20 rounds as a bar chart
+            const recent = STATE.history.slice(-20);
+            const cy = 730, ch = 200;
+            txt(ctx, t('card_recent').toUpperCase(), 72, cy, { size: 26, weight: 700, color: 'rgba(255,255,255,0.6)' });
+            ctx.fillStyle = 'rgba(255,255,255,0.1)'; rr(ctx, 60, cy + 20, CARD_W - 120, ch + 30, 30); ctx.fill();
+            if (recent.length) {
+                const n = 20, gap = 10, w = (CARD_W - 160 - gap * (n - 1)) / n;
+                recent.forEach((h, i) => {
+                    const hh = Math.max(8, ch * (h.pts || 0) / 5000);
+                    ctx.fillStyle = ptsColor(h.pts || 0);
+                    rr(ctx, 80 + i * (w + gap), cy + 35 + ch - hh, w, hh, Math.min(8, w / 2)); ctx.fill();
+                });
+            } else {
+                txt(ctx, t('lbl_no_history'), CARD_W / 2, cy + 140, { size: 32, weight: 600, color: 'rgba(255,255,255,0.7)', align: 'center' });
+            }
+
+            // Countries explored
+            const flags = [...new Set(STATE.history.map(h => h.flag).filter(Boolean))];
+            const fy = 1010;
+            txt(ctx, t('card_countries').toUpperCase(), 72, fy, { size: 26, weight: 700, color: 'rgba(255,255,255,0.6)' });
+            txt(ctx, String(flags.length), CARD_W - 72, fy, { size: 30, weight: 800, align: 'right' });
+            flags.slice(0, 13).forEach((f, i) => emoji(ctx, f, 72 + i * 72, fy + 70, 52));
+            if (flags.length > 13) txt(ctx, '+' + (flags.length - 13), 72 + 13 * 72, fy + 60, { size: 32, weight: 700 });
+
+            cardFooter(ctx, t('card_cta_profile'));
+            return cv;
+        }
+
+        // ==================== SHARE SHEET ====================
+        let shareFile = null, shareUrl = null, shareText = '';
+        async function openShareSheet(canvas, filename, text) {
+            const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+            if (!blob) { window.sendShareLink(); return; }
+            if (shareUrl) URL.revokeObjectURL(shareUrl);
+            shareUrl = URL.createObjectURL(blob);
+            shareFile = new File([blob], filename, { type: 'image/png' });
+            shareText = text;
+            $('share-img').src = shareUrl;
+            const canShareFile = !!(navigator.canShare && navigator.canShare({ files: [shareFile] }));
+            $('share-native').classList.toggle('hidden', !canShareFile);
+            $('share-hint').classList.toggle('hidden', canShareFile);
+            $('share-modal').classList.remove('hidden');
+            mainBeforeShare = lastMain;
+            setMain(null);
+            haptic('light');
+        }
+        let mainBeforeShare = null;
+        window.closeShareSheet = () => {
+            if ($('share-modal').classList.contains('hidden')) return;
+            $('share-modal').classList.add('hidden');
+            if (mainBeforeShare) setMain(...mainBeforeShare);
+        };
+        window.shareImageNative = async () => {
+            try { await navigator.share({ files: [shareFile], text: shareText }); } catch (e) { }
+        };
+        window.saveShareImage = () => {
+            const a = document.createElement('a');
+            a.href = shareUrl; a.download = shareFile.name;
+            document.body.appendChild(a); a.click(); a.remove();
+        };
+        window.sendShareLink = () => {
+            const url = `https://t.me/share/url?url=${encodeURIComponent(BOT_APP_LINK)}&text=${encodeURIComponent(shareText)}`;
             if (IN_TG) TG.openTelegramLink(url); else window.open(url, '_blank');
+        };
+
+        function currentModeLabel() {
+            if (STATE.mode === 'multi') return `👥 ${t('lbl_party')}`;
+            const where = STATE.selectedCountry ? `${COUNTRY_POOLS[STATE.selectedCountry].flag} ${countryName(STATE.selectedCountry)}` : `🌍 ${t('lbl_world')}`;
+            return STATE.mode === 'challenge' ? `${where} · ⏱` : where;
+        }
+
+        window.shareResult = () => {
+            const rounds = STATE.mode === 'multi' ? (STATE.lastRound ? [STATE.lastRound] : []) : STATE.roundResults;
+            const total = rounds.reduce((s, r) => s + r.pts, 0);
+            const text = t('msg_share_text').replace('{s}', fmt(total));
+            if (!rounds.length) { shareText = text; window.sendShareLink(); return; }
+            openShareSheet(drawScoreCard(rounds, currentModeLabel()), 'geoguessr-score.png', text);
+        };
+
+        window.shareProfile = async () => {
+            const text = t('msg_share_profile').replace('{l}', levelInfo().level).replace('{x}', fmt(STATE.totalScore));
+            openShareSheet(await drawProfileCard(), 'geoguessr-profile.png', text);
         };
 
         init();
