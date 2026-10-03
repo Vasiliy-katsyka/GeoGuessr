@@ -1215,7 +1215,7 @@
             btn_share_story: "Share to Story",
             msg_making_card: "Making your card…",
             msg_uploading: "Preparing image…",
-            msg_upload_failed: "Couldn't upload the image. Try “Save image” instead.",
+            msg_upload_failed: "Couldn't prepare the image. Long-press it to save or forward instead.",
             card_map: "Places explored",
             btn_share_image: "Share image",
             btn_save_image: "Save image",
@@ -1285,7 +1285,7 @@
             btn_share_story: "Опубликовать в историю",
             msg_making_card: "Рисуем карточку…",
             msg_uploading: "Готовим картинку…",
-            msg_upload_failed: "Не удалось загрузить картинку. Попробуй «Сохранить картинку».",
+            msg_upload_failed: "Не удалось подготовить картинку. Зажми её, чтобы сохранить или переслать.",
             card_map: "Где ты побывал",
             btn_share_image: "Поделиться картинкой",
             btn_save_image: "Сохранить картинку",
@@ -2756,28 +2756,34 @@
         }
 
         // ==================== SHARE SHEET ====================
-        // Cards are uploaded to Firebase Storage on demand so Telegram can use them
-        // (stories, image link previews in chats, native downloads).
-        let shareBlob = null, shareLocalUrl = null, shareRemoteUrl = null, shareName = '', shareText = '', mainBeforeShare = null;
+        // Cards are handed to the bot's Cloudflare Worker (worker/share-card.js), which lets Telegram
+        // store the picture for free and returns a prepared message (for shareMessage) and an image URL
+        // (for stories and downloads).
+        const SHARE_API = 'https://geo-bot.kviappsgames.workers.dev/api/share-card';
+        let shareBlob = null, shareLocalUrl = null, shareRemote = null, shareName = '', shareText = '', mainBeforeShare = null;
 
         async function uploadShareImage() {
-            if (shareRemoteUrl) return shareRemoteUrl;
-            // Loaded on first use so a Storage outage can never break the game itself
-            const { getStorage, ref: storageRef, uploadBytes, getDownloadURL } = await import("https://www.gstatic.com/firebasejs/12.8.0/firebase-storage.js");
-            const r = storageRef(getStorage(app), `share/${STATE.myUid}_${Date.now()}.jpg`);
-            await uploadBytes(r, shareBlob, { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000' });
-            shareRemoteUrl = await getDownloadURL(r);
-            return shareRemoteUrl;
+            if (shareRemote) return shareRemote;
+            const fd = new FormData();
+            fd.append('photo', shareBlob, shareName);
+            fd.append('initData', TG.initData);
+            fd.append('caption', shareText + '\n' + BOT_APP_LINK);
+            const res = await fetch(SHARE_API, { method: 'POST', body: fd });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.image_url) throw new Error(data.error || 'HTTP ' + res.status);
+            shareRemote = data;
+            return shareRemote;
         }
         async function withUpload(fn) {
+            if (!IN_TG) return false;
             toast(t('msg_uploading'));
-            try { const url = await uploadShareImage(); $('toast').classList.remove('show'); fn(url); }
+            try { const r = await uploadShareImage(); $('toast').classList.remove('show'); fn(r); }
             catch (e) { console.warn('Card upload failed', e); toast(t('msg_upload_failed')); return false; }
             return true;
         }
 
         async function openShareSheet(cardPromise, filename, text) {
-            shareBlob = null; shareRemoteUrl = null; shareName = filename; shareText = text;
+            shareBlob = null; shareRemote = null; shareName = filename; shareText = text;
             $('share-img').classList.add('hidden');
             $('share-loading').classList.remove('hidden');
             $('share-actions').classList.add('hidden');
@@ -2813,10 +2819,10 @@
             if (mainBeforeShare) setMain(...mainBeforeShare);
         };
 
-        window.shareToStory = () => withUpload(url => {
+        window.shareToStory = () => withUpload(({ image_url }) => {
             const params = { text: shareText.slice(0, 200) };
             if (USER.is_premium) params.widget_link = { url: BOT_APP_LINK, name: 'GeoGuessr' };
-            TG.shareToStory(url, params);
+            TG.shareToStory(image_url, params);
         });
 
         window.shareImageNative = async () => {
@@ -2825,7 +2831,7 @@
 
         window.saveShareImage = async () => {
             if (IN_TG && tgv('8.0')) {
-                const ok = await withUpload(url => TG.downloadFile({ url, file_name: shareName }));
+                const ok = await withUpload(({ image_url }) => TG.downloadFile({ url: image_url + '?download', file_name: shareName }));
                 if (ok) return;
             }
             const a = document.createElement('a');
@@ -2837,9 +2843,12 @@
             const link = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(shareText + '\n' + BOT_APP_LINK)}`;
             if (IN_TG) TG.openTelegramLink(link); else window.open(link, '_blank');
         }
-        // Sends the uploaded image link (Telegram shows it as a picture preview); falls back to the bot link.
+        // Opens Telegram's chat picker with the picture itself; falls back to a plain bot link.
         window.sendShareLink = async () => {
-            const ok = await withUpload(url => sendLink(url));
+            const ok = await withUpload(({ prepared_id, image_url }) => {
+                if (prepared_id && tgv('8.0')) TG.shareMessage(prepared_id);
+                else sendLink(image_url);
+            });
             if (!ok) sendLink(BOT_APP_LINK);
         };
 
