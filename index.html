@@ -1161,7 +1161,8 @@
             lbl_distance_val: "{d} away",
             lbl_rounds: "Rounds",
             lbl_level_xp: "Level {l} · {x} XP",
-            btn_play_in: "Play {c}"
+            btn_play_in: "Play {c}",
+            msg_no_locations: "Couldn't load street view right now. Please try again in a moment."
         });
         Object.assign(TR.ru, {
             app_subtitle: "Угадай, где ты на карте мира",
@@ -1201,7 +1202,8 @@
             lbl_distance_val: "в {d} от точки",
             lbl_rounds: "Раунды",
             lbl_level_xp: "Уровень {l} · {x} XP",
-            btn_play_in: "Играть: {c}"
+            btn_play_in: "Играть: {c}",
+            msg_no_locations: "Не удалось загрузить панораму. Попробуй ещё раз чуть позже."
         });
 
         let map, mly, guessMarker, resultLine, resultMarker, oppMarkers = [];
@@ -1310,18 +1312,30 @@
             const city = pool[Math.floor(Math.random() * pool.length)];
             const rLat = city.lat + (Math.random() * 0.08 - 0.04);
             const rLng = city.lng + (Math.random() * 0.08 - 0.04);
-            const bbox = `${rLng - 0.05},${rLat - 0.05},${rLng + 0.05},${rLat + 0.05}`;
+            // Mapillary rejects heavy queries with HTTP 500, so keep the box small (~2 km)
+            // and filter panoramas ourselves instead of using the server-side is_pano filter.
+            const d = 0.01;
+            const bbox = [rLng - d, rLat - d, rLng + d, rLat + d].map(n => n.toFixed(5)).join(',');
 
             try {
-                const res = await fetch(`https://graph.mapillary.com/images?access_token=${MLY_TOKEN}&fields=id,geometry&is_pano=true&bbox=${bbox}&limit=1`);
+                const res = await fetch(`https://graph.mapillary.com/images?access_token=${encodeURIComponent(MLY_TOKEN)}&fields=id,geometry,is_pano&bbox=${bbox}&limit=50`);
+                if (!res.ok) {
+                    if (!fetchValidLocation.warned) {
+                        fetchValidLocation.warned = true;
+                        console.warn('Mapillary API error', res.status, await res.text().catch(() => ''));
+                    }
+                    return null;
+                }
                 const data = await res.json();
                 if (data.data && data.data.length > 0) {
+                    const panos = data.data.filter(img => img.is_pano);
+                    const pick = (panos.length ? panos : data.data)[Math.floor(Math.random() * (panos.length || data.data.length))];
                     const cityName = countryCode ? COUNTRY_POOLS[countryCode].name : city.name;
                     const cityFlag = countryCode ? COUNTRY_POOLS[countryCode].flag : (city.flag || "");
                     return {
-                        id: data.data[0].id,
-                        lat: data.data[0].geometry.coordinates[1],
-                        lng: data.data[0].geometry.coordinates[0],
+                        id: pick.id,
+                        lat: pick.geometry.coordinates[1],
+                        lng: pick.geometry.coordinates[0],
                         city: { name: cityName, flag: cityFlag }
                     };
                 }
@@ -1368,7 +1382,7 @@
         // ==================== INIT ====================
         function init() {
             map = L.map('map', { zoomControl: false, worldCopyJump: true }).setView([20, 0], 2);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '©CARTO ©OSM' }).addTo(map);
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
             $('map-sheet').addEventListener('transitionend', () => map.invalidateSize());
             if (TG?.onEvent) TG.onEvent('viewportChanged', () => map.invalidateSize());
 
@@ -1583,6 +1597,7 @@
             }
         }
 
+        let loadFailures = 0;
         function startGameLoop() {
             resetMapUI();
             if (STATE.mode === 'multi') return;
@@ -1592,10 +1607,20 @@
             pickRandomLocation()
                 .then(loc => {
                     if (s !== STATE.session) return;
+                    loadFailures = 0;
                     STATE.currentLoc = loc;
                     loadLocation(loc, s);
                 })
-                .catch(() => { if (s === STATE.session) startGameLoop(); });
+                .catch(() => {
+                    if (s !== STATE.session) return;
+                    if (++loadFailures >= 4) {
+                        loadFailures = 0;
+                        tgAlert(t('msg_no_locations'));
+                        window.showMainMenu();
+                        return;
+                    }
+                    setTimeout(() => { if (s === STATE.session) startGameLoop(); }, 800 * loadFailures);
+                });
         }
 
         function loadLocation(loc, s = STATE.session) {
